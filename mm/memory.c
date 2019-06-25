@@ -110,14 +110,16 @@ EXPORT_SYMBOL(high_memory);
 /*
  * Randomize the address space (stacks, mmaps, brk, etc.).
  *
- * ( When CONFIG_COMPAT_BRK=y we exclude brk from randomization,
+ * ( When CONFIG_ASLR_FULL is undefined we exclude brk from randomization,
  *   as ancient (libc5 based) binaries can segfault. )
  */
 int randomize_va_space __read_mostly =
-#ifdef CONFIG_COMPAT_BRK
+#if defined(CONFIG_ASLR_FULL)
+					2;
+#elif defined(CONFIG_ASLR_PARTIAL)
 					1;
 #else
-					2;
+					0;
 #endif
 
 static int __init disable_randmaps(char *s)
