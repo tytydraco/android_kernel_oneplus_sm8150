@@ -23,7 +23,6 @@
 #include "adreno.h"
 #include "a6xx_reg.h"
 #include "adreno_a6xx.h"
-#include "adreno_snapshot.h"
 #include "adreno_trace.h"
 
 static const unsigned int a6xx_gmu_gx_registers[] = {
@@ -1437,80 +1436,6 @@ struct gmu_mem_type_desc {
 	uint32_t type;
 };
 
-static size_t a6xx_snapshot_gmu_mem(struct kgsl_device *device,
-		u8 *buf, size_t remain, void *priv)
-{
-	struct kgsl_snapshot_gmu *header = (struct kgsl_snapshot_gmu *)buf;
-	struct gmu_mem_type_desc *desc = priv;
-	unsigned int *data = (unsigned int *)(buf + sizeof(*header));
-
-	if (priv == NULL)
-		return 0;
-
-	if (remain < desc->memdesc->size + sizeof(*header)) {
-		KGSL_CORE_ERR(
-			"snapshot: Not enough memory for the gmu section %d\n",
-			desc->type);
-		return 0;
-	}
-
-	header->type = desc->type;
-	header->size = desc->memdesc->size;
-
-	/* Just copy the ringbuffer, there are no active IBs */
-	memcpy(data, desc->memdesc->hostptr, desc->memdesc->size);
-
-	return desc->memdesc->size + sizeof(*header);
-}
-
-/*
- * a6xx_gmu_snapshot() - A6XX GMU snapshot function
- * @adreno_dev: Device being snapshotted
- * @snapshot: Pointer to the snapshot instance
- *
- * This is where all of the A6XX GMU specific bits and pieces are grabbed
- * into the snapshot memory
- */
-static void a6xx_gmu_snapshot(struct adreno_device *adreno_dev,
-		struct kgsl_snapshot *snapshot)
-{
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	struct gmu_device *gmu = KGSL_GMU_DEVICE(device);
-	bool gx_on;
-	struct gmu_mem_type_desc desc[] = {
-		{gmu->hfi_mem, SNAPSHOT_GMU_HFIMEM},
-		{gmu->gmu_log, SNAPSHOT_GMU_LOG},
-		{gmu->dump_mem, SNAPSHOT_GMU_DUMPMEM} };
-	unsigned int val, i;
-
-	if (!gmu_core_isenabled(device))
-		return;
-
-	for (i = 0; i < ARRAY_SIZE(desc); i++) {
-		if (desc[i].memdesc)
-			kgsl_snapshot_add_section(device,
-					KGSL_SNAPSHOT_SECTION_GMU,
-					snapshot, a6xx_snapshot_gmu_mem,
-					&desc[i]);
-	}
-
-	adreno_snapshot_registers(device, snapshot, a6xx_gmu_registers,
-					ARRAY_SIZE(a6xx_gmu_registers) / 2);
-
-	gx_on = a6xx_gmu_gx_is_on(adreno_dev);
-
-	if (gx_on) {
-		/* Set fence to ALLOW mode so registers can be read */
-		kgsl_regwrite(device, A6XX_GMU_AO_AHB_FENCE_CTRL, 0);
-		kgsl_regread(device, A6XX_GMU_AO_AHB_FENCE_CTRL, &val);
-
-		KGSL_DRV_ERR(device, "set FENCE to ALLOW mode:%x\n", val);
-		adreno_snapshot_registers(device, snapshot,
-				a6xx_gmu_gx_registers,
-				ARRAY_SIZE(a6xx_gmu_gx_registers) / 2);
-	}
-}
-
 static int a6xx_gmu_wait_for_active_transition(
 	struct adreno_device *adreno_dev)
 {
@@ -1556,7 +1481,6 @@ struct gmu_dev_ops adreno_a6xx_gmudev = {
 	.wait_for_gmu_idle = a6xx_gmu_wait_for_idle,
 	.ifpc_store = a6xx_gmu_ifpc_store,
 	.ifpc_show = a6xx_gmu_ifpc_show,
-	.snapshot = a6xx_gmu_snapshot,
 	.wait_for_active_transition = a6xx_gmu_wait_for_active_transition,
 	.gmu2host_intr_mask = HFI_IRQ_MASK,
 	.gmu_ao_intr_mask = GMU_AO_INT_MASK,
