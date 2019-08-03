@@ -36,7 +36,7 @@ static struct work_struct input_boost_work;
 
 static bool input_boost_enabled;
 
-static unsigned int input_boost_ms = 40;
+static unsigned int input_boost_ms = 250;
 module_param(input_boost_ms, uint, 0644);
 
 static unsigned int sched_boost_on_input;
