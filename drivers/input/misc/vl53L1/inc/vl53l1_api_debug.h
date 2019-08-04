@@ -176,11 +176,18 @@ VL53L1_Error VL53L1_get_histogram_debug_data(
 
 
 
-
+#ifdef CONFIG_DEBUG_KERNEL
 VL53L1_Error VL53L1_get_additional_data(
 	VL53L1_DEV                Dev,
 	VL53L1_additional_data_t *pdata);
-
+#else
+static inline VL53L1_Error VL53L1_get_additional_data(
+	VL53L1_DEV                Dev,
+	VL53L1_additional_data_t *pdata)
+{
+	return VL53L1_ERROR_NONE;
+}
+#endif
 
 
 
