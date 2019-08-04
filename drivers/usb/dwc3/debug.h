@@ -631,6 +631,7 @@ static inline const char *dwc3_gadget_generic_cmd_status_string(int status)
 	}
 }
 
+#ifdef CONFIG_DEBUG_KERNEL
 void dwc3_dbg_print(struct dwc3 *dwc, u8 ep_num,
 		const char *name, int status, const char *extra);
 void dwc3_dbg_done(struct dwc3 *dwc, u8 ep_num,
@@ -643,6 +644,37 @@ void dwc3_dbg_setup(struct dwc3 *dwc, u8 ep_num,
 		const struct usb_ctrlrequest *req);
 void dwc3_dbg_print_reg(struct dwc3 *dwc,
 		const char *name, int reg);
+#else
+static inline void dwc3_dbg_print(struct dwc3 *dwc, u8 ep_num,
+		const char *name, int status, const char *extra)
+{
+}
+
+static inline void dwc3_dbg_done(struct dwc3 *dwc, u8 ep_num,
+		const u32 count, int status)
+{
+}
+
+static inline void dwc3_dbg_event(struct dwc3 *dwc, u8 ep_num,
+		const char *name, int status)
+{
+}
+
+static inline void dwc3_dbg_queue(struct dwc3 *dwc, u8 ep_num,
+		const struct usb_request *req, int status)
+{
+}
+
+static inline void dwc3_dbg_setup(struct dwc3 *dwc, u8 ep_num,
+		const struct usb_ctrlrequest *req)
+{
+}
+
+static inline void dwc3_dbg_print_reg(struct dwc3 *dwc,
+		const char *name, int reg)
+{
+}
+#endif
 
 #ifdef CONFIG_DEBUG_FS
 extern void dwc3_debugfs_init(struct dwc3 *);
