@@ -138,8 +138,24 @@ struct clk_debug_mux {
 
 extern const struct clk_ops clk_debug_mux_ops;
 
+#ifdef CONFIG_DEBUG_KERNEL
 int clk_debug_measure_register(struct clk_hw *hw);
 int clk_debug_measure_add(struct clk_hw *hw, struct dentry *dentry);
 void clk_debug_bus_vote(struct clk_hw *hw, bool enable);
+#else
+static inline int clk_debug_measure_register(struct clk_hw *hw)
+{
+	return 0;
+}
+
+static inline int clk_debug_measure_add(struct clk_hw *hw, struct dentry *dentry)
+{
+	return 0;
+}
+
+static inline void clk_debug_bus_vote(struct clk_hw *hw, bool enable)
+{
+}
+#endif
 
 #endif
