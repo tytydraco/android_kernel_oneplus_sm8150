@@ -16,6 +16,14 @@
 #include <linux/debugfs.h>
 #include "cam_req_mgr_core.h"
 
+#ifdef CONFIG_DEBUG_KERNEL
 int cam_req_mgr_debug_register(struct cam_req_mgr_core_device *core_dev);
+#else
+static inline
+int cam_req_mgr_debug_register(struct cam_req_mgr_core_device *core_dev)
+{
+	return 0;
+}
+#endif
 
 #endif

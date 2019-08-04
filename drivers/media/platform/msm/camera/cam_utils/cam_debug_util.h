@@ -49,6 +49,7 @@
 #define CAM_HYP        (1 << 26)
 #define STR_BUFFER_MAX_LENGTH  1024
 
+#ifdef CONFIG_DEBUG_KERNEL
 /*
  *  cam_debug_log()
  *
@@ -73,6 +74,17 @@ void cam_debug_log(unsigned int module_id, const char *func, const int line,
  * @module_id :  Module ID which is using this function
  */
 const char *cam_get_module_name(unsigned int module_id);
+#else
+static inline void cam_debug_log(unsigned int module_id,
+	const char *func, const int line, const char *fmt, ...)
+{
+}
+
+static inline const char *cam_get_module_name(unsigned int module_id)
+{
+	return NULL;
+}
+#endif
 
 /*
  * CAM_ERR
