@@ -133,6 +133,12 @@ int32_t npu_host_exec_network_v2(struct npu_client *client,
 int32_t npu_host_loopback_test(struct npu_device *npu_dev);
 void npu_host_cleanup_networks(struct npu_client *client);
 
+#ifdef CONFIG_DEBUG_KERNEL
 void npu_dump_debug_timeout_stats(struct npu_device *npu_dev);
+#else
+static inline void npu_dump_debug_timeout_stats(struct npu_device *npu_dev)
+{
+}
+#endif
 
 #endif /* _NPU_MGR_H */
