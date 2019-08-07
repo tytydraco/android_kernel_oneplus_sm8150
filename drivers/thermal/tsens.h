@@ -49,7 +49,7 @@ enum tsens_dbg_type {
 
 struct tsens_device;
 
-#if defined(CONFIG_THERMAL_TSENS)
+#if defined(CONFIG_THERMAL_TSENS) && defined(CONFIG_DEBUG_KERNEL)
 int tsens2xxx_dbg(struct tsens_device *data, u32 id, u32 dbg_type, int *temp);
 #else
 static inline int tsens2xxx_dbg(struct tsens_device *data, u32 id,
