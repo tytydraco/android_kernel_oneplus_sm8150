@@ -1532,19 +1532,10 @@ static int sec_get_face_detect(void * chip_data)
     return state;
 }
 
-
-#ifdef CONFIG_TOUCHPANEL_MTK_PLATFORM
-extern unsigned int upmu_get_rgs_chrdet(void);
-static int sec_get_usb_state(void)
-{
-    return upmu_get_rgs_chrdet();
-}
-#else
 static int sec_get_usb_state(void)
 {
     return 0;
 }
-#endif
 
 static struct oppo_touchpanel_operations sec_ops = {
     .get_vendor                 = sec_get_vendor,
