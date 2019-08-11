@@ -146,22 +146,6 @@ static int sec_enable_charge_mode(struct chip_data_s6sy761 *chip_info, bool enab
     return ret;
 }
 
-static int sec_enable_earsense_mode(struct chip_data_s6sy761 *chip_info, bool enable)
-{
-    int ret = -1;
-
-    if (enable) {
-        ret = touch_i2c_write_byte(chip_info->client, SEC_CMD_HOVER_DETECT, 1);
-        ret |= touch_i2c_write_byte(chip_info->client, SEC_CMD_MUTU_RAW_TYPE, TYPE_DATA_DELTA);
-    } else {
-        ret = touch_i2c_write_byte(chip_info->client, SEC_CMD_HOVER_DETECT, 0);
-        ret |= touch_i2c_write_byte(chip_info->client, SEC_CMD_MUTU_RAW_TYPE, TYPE_SIGNAL_DATA);
-    }
-
-    TPD_INFO("%s: state: %d %s!\n", __func__, enable, ret < 0 ? "failed" : "success");
-    return ret;
-}
-
 static int sec_enable_face_mode(struct chip_data_s6sy761 *chip_info, bool enable)
 {
     int ret = -1;
@@ -1436,13 +1420,6 @@ static int sec_mode_switch(void *chip_data, work_mode mode, bool flag)
             }
             break;
 
-        case MODE_EARSENSE:
-            ret = sec_enable_earsense_mode(chip_info, flag);
-            if (ret < 0) {
-                TPD_INFO("%s: enable earsense mode : %d failed\n", __func__, flag);
-            }
-            break;
-
 		case MODE_FACE_DETECT:
 			ret = sec_enable_face_mode(chip_info, flag);
 			if (ret < 0) {
@@ -1864,9 +1841,6 @@ static void sec_main_register_read(struct seq_file *s, void *chip_data)
     state = touch_i2c_read_byte(chip_info->client, SEC_CMD_STATEMANAGE_ON);
     seq_printf(s, "auto change enabled: 0x%02x\n", state);
 
-    state = touch_i2c_read_byte(chip_info->client, SEC_CMD_HOVER_DETECT);
-    seq_printf(s, "earsense state: 0x%02x\n", state);
-
     state = touch_i2c_read_word(chip_info->client, SEC_CMD_PALM_SWITCH);
     seq_printf(s, "palm state: 0x%04x(0x0041-off/0x0061-on)\n", state);
 
@@ -1904,144 +1878,6 @@ static struct debug_info_proc_operations debug_info_proc_ops = {
     .reserve_read       = sec_reserve_read,
 };
 
-static void sec_earsese_rawdata_read(void *chip_data, char *rawdata, int read_len)
-{
-    int ret = 0;
-    u8 buf[2] = {0};
-    int i = 0, j = 0;
-    int8_t tmp_byte[2] = {0};
-    struct chip_data_s6sy761 *chip_info = (struct chip_data_s6sy761 *)chip_data;
-    uint8_t len_y = chip_info->hw_res->EARSENSE_RX_NUM;
-	uint8_t len_x = chip_info->hw_res->EARSENSE_TX_NUM;
-
-	if ((!chip_info) || (!rawdata))
-        return;
-
-    buf[0] = (u8)((read_len >> 8) & 0xFF);
-    buf[1] = (u8)(read_len & 0xFF);
-    touch_i2c_write_byte(chip_info->client, SEC_CMD_MUTU_RAW_TYPE, TYPE_DATA_RAWDATA);
-    touch_i2c_write_block(chip_info->client, SEC_CMD_TOUCH_RAWDATA_SETLEN, 2, buf);
-    ret = touch_i2c_read_block(chip_info->client, SEC_CMD_TOUCH_RAWDATA_READ, read_len, rawdata);
-    if (ret < 0) {
-        TPD_INFO("read rawdata failed\n");
-        return;
-    }
-	TPD_INFO("sec_earsese_rawdata_read lenx = %d, leny =%d\n",len_x,len_y);
-	for(i = 0; i < read_len; i++ ) {
-		TPD_INFO("rawdata = %d\n",rawdata[i]);
-	}
-    for (i = 0; i < len_y; i++) {
-        for (j = 0; j < len_x/2; j++) {
-            tmp_byte[0] = rawdata[2*(len_x*i+j)];
-            tmp_byte[1] = rawdata[2*(len_x*i+j)+1];
-            rawdata[2*(len_x*i+j)] = rawdata[2*(len_x*i+len_x-1-j)+1];
-            rawdata[2*(len_x*i+j)+1] = rawdata[2*(len_x*i+len_x-1-j)];
-            rawdata[2*(len_x*i+len_x-1-j)] = tmp_byte[1];
-            rawdata[2*(len_x*i+len_x-1-j)+1] = tmp_byte[0];
-        }
-    }
-    if (len_x%2) {
-        j = len_x/2;
-        for (i = 0; i < len_y; i++) {
-            tmp_byte[0] = rawdata[2*(len_x*i+j)];
-            rawdata[2*(len_x*i+j)] = rawdata[2*(len_x*i+j)+1];
-            rawdata[2*(len_x*i+j)+1] = tmp_byte[0];
-        }
-    }
-    return;
-}
-
-static void sec_earsese_delta_read(void *chip_data, char *earsense_delta, int read_len)
-{
-    int ret = 0, hover_status = 0, data_type = 0;
-    u8 buf[2] = {0};
-    int i = 0, j = 0;
-    int8_t tmp_byte[2] = {0};
-    struct chip_data_s6sy761 *chip_info = (struct chip_data_s6sy761 *)chip_data;
-    uint8_t len_x = chip_info->hw_res->EARSENSE_TX_NUM;
-    uint8_t len_y = chip_info->hw_res->EARSENSE_RX_NUM;
-
-    if (!chip_info)
-        return ;
-
-    if (!earsense_delta) {
-        TPD_INFO("earsense_delta is NULL\n");
-        return;
-    }
-
-    buf[0] = (u8)((read_len >> 8) & 0xFF);
-    buf[1] = (u8)(read_len & 0xFF);
-    hover_status = touch_i2c_read_byte(chip_info->client, SEC_CMD_HOVER_DETECT); //read hover state
-    data_type = touch_i2c_read_byte(chip_info->client, SEC_CMD_MUTU_RAW_TYPE); //read current data type
-    if (hover_status && (data_type != TYPE_DATA_DELTA)) {
-        touch_i2c_write_byte(chip_info->client, SEC_CMD_MUTU_RAW_TYPE, TYPE_DATA_DELTA);
-        sec_mdelay(20);
-    } else if (!hover_status && (data_type != TYPE_SIGNAL_DATA)){
-        touch_i2c_write_byte(chip_info->client, SEC_CMD_MUTU_RAW_TYPE, TYPE_SIGNAL_DATA);
-        sec_mdelay(20);
-    }
-
-    touch_i2c_write_block(chip_info->client, SEC_CMD_TOUCH_RAWDATA_SETLEN, 2, buf);
-    ret = touch_i2c_read_block(chip_info->client, SEC_CMD_TOUCH_DELTA_READ, read_len, earsense_delta);
-    if (ret < 0) {
-        TPD_INFO("read delta failed\n");
-        return;
-    }
-	for(i = 0; i < read_len; i++ ) {
-		TPD_INFO("earsense_delta = %d\n",earsense_delta[i]);
-	}
-    for (i = 0; i < len_y; i++) {
-        for (j = 0; j < len_x/2; j++) {
-            tmp_byte[0] = earsense_delta[2*(len_x*i+j)];
-            tmp_byte[1] = earsense_delta[2*(len_x*i+j)+1];
-            earsense_delta[2*(len_x*i+j)] = earsense_delta[2*(len_x*i+len_x-1-j)+1];
-            earsense_delta[2*(len_x*i+j)+1] = earsense_delta[2*(len_x*i+len_x-1-j)];
-            earsense_delta[2*(len_x*i+len_x-1-j)] = tmp_byte[1];
-            earsense_delta[2*(len_x*i+len_x-1-j)+1] = tmp_byte[0];
-        }
-    }
-    if (len_x%2) {
-        j = len_x/2;
-        for (i = 0; i < len_y; i++) {
-            tmp_byte[0] = earsense_delta[2*(len_x*i+j)];
-            earsense_delta[2*(len_x*i+j)] = earsense_delta[2*(len_x*i+j)+1];
-            earsense_delta[2*(len_x*i+j)+1] = tmp_byte[0];
-        }
-    }
-    return;
-}
-
-static void sec_earsese_selfdata_read( void *chip_data, char *self_data, int read_len)
-{
-    int i = 0, ret = 0;
-    int8_t tmp = 0;
-    struct chip_data_s6sy761 *chip_info = (struct chip_data_s6sy761 *)chip_data;
-
-    if ((!chip_info) || (!self_data))
-        return ;
-
-    ret = touch_i2c_read_block(chip_info->client, SEC_CMD_TOUCH_SELFDATA_READ, read_len, self_data);
-    if (ret < 0) {
-        TPD_INFO("read selfdata failed\n");
-        return;
-    }
-	for(i = 0; i < read_len; i++ ) {
-		TPD_INFO("self_data = %d\n",self_data[i]);
-	}
-    for (i = 0; i < chip_info->hw_res->TX_NUM + chip_info->hw_res->RX_NUM; i++) {
-        tmp = self_data[2*i];
-        self_data[2*i] = self_data[2*i + 1];
-        self_data[2*i + 1] = tmp;
-    }
-    return;
-}
-
-
-static struct earsense_proc_operations earsense_proc_ops = {
-    .rawdata_read = sec_earsese_rawdata_read,
-    .delta_read   = sec_earsese_delta_read,
-    .self_data_read = sec_earsese_selfdata_read,
-};
 /***************** End of implementation of debug_info proc callbacks*************************/
 
 static int sec_get_verify_result(struct chip_data_s6sy761 *chip_info)
@@ -2137,7 +1973,6 @@ static int sec_tp_probe(struct i2c_client *client, const struct i2c_device_id *i
     chip_info->hw_res = &ts->hw_res;
     /* 4. file_operations callbacks binding */
     ts->ts_ops = &sec_ops;
-    ts->earsense_ops = &earsense_proc_ops;
 
     /* 5. register common touch device*/
     ret = register_common_touch_device(ts);
