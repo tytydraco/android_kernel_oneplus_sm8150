@@ -48,6 +48,8 @@ struct pm_qos_request pm_qos_req_tp;
 /*******Part0:LOG TAG Declear********************/
 
 #define TPD_DEVICE "synaptics-s3706"
+
+#ifdef DEBUG
 #define TPD_INFO(a, arg...)  pr_err("[TP]"TPD_DEVICE ": " a, ##arg)
 #define TPD_DEBUG(a, arg...)\
         do {\
@@ -69,7 +71,12 @@ struct pm_qos_request pm_qos_req_tp;
                         printk(a, ##arg);\
                 }\
         }while(0)
-
+#else
+#define TPD_INFO(a, arg...) do {} while (0)
+#define TPD_DEBUG(a, arg...) do {} while (0)
+#define TPD_DETAIL(a, arg...) do {} while (0)
+#define TPD_DEBUG_NTAG(a, arg...) do {} while (0)
+#endif
 /*******Part1:Call Back Function implement*******/
 
 int tp_single_tap_en(struct chip_data_s3706 *ts, bool enable)
