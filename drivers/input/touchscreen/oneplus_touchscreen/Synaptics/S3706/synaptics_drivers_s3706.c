@@ -3518,54 +3518,6 @@ static u8 synaptics_get_keycode(void *chip_data)
         return bitmap_result;
 }
 
-static void synaptics_data_logger_get(void * chip_data)
-{
-        int ret = 0, i = 0;
-        int data_length = 0;
-        uint8_t *log_data = kzalloc(255 * (sizeof(uint8_t)), GFP_KERNEL);
-        struct chip_data_s3706 *chip_info = (struct chip_data_s3706 *)chip_data;
-
-        if (true == chip_info->d_log.data_logger_control) {
-                ret = touch_i2c_write_byte(chip_info->client, 0xff, (uint8_t)(chip_info->d_log.loglength_addr >> 8));        /* page 4*/
-                data_length = touch_i2c_read_byte(chip_info->client, (uint8_t)(chip_info->d_log.loglength_addr & 0xFF));
-                if (data_length < 1 || data_length > 255) {
-			kfree(log_data);
-                        return;
-                } else {
-                        ret = touch_i2c_read_block(chip_info->client, ((uint8_t)(chip_info->d_log.loglength_addr & 0xFF) + 1), data_length, log_data);         /*read log*/
-                        TPD_INFO("data_length = %d, ", data_length);
-                        for (i = 0; i< data_length; i++) {
-                                printk(" [0x%x], ", log_data[i]);
-                        }
-                        TPD_INFO("\n");
-                }
-
-                ret = touch_i2c_write_byte(chip_info->client, 0xff, 0x0);        /* page 0*/
-        }
-		kfree(log_data);
-}
-
-static void synaptics_data_logger_open(void * chip_data)
-{
-        int ret = 0;
-        uint8_t l_tmp = 0, h_tmp = 0;
-        struct chip_data_s3706 *chip_info = (struct chip_data_s3706 *)chip_data;
-
-        /*Get status of IC log*/
-        ret = touch_i2c_write_byte(chip_info->client, 0xff, 0x04);        /* page 4*/
-        ret = touch_i2c_read_byte(chip_info->client, chip_info->reg_info.F51_CUSTOM_QUERY_BASE + 0x04);
-        TPD_INFO("F51_CUSTOM_QUERY05 is %d\n", ret);
-        if (1 == ret) {
-                chip_info->d_log.data_logger_control = true;
-                l_tmp = touch_i2c_read_byte(chip_info->client, chip_info->reg_info.F51_CUSTOM_QUERY_BASE + 0x05);
-                h_tmp = touch_i2c_read_byte(chip_info->client, chip_info->reg_info.F51_CUSTOM_QUERY_BASE + 0x06);
-                chip_info->d_log.loglength_addr = (h_tmp << 8) | l_tmp;
-                chip_info->d_log.loginfo_addr = chip_info->d_log.loglength_addr + 1;
-                TPD_INFO("l_tmp = 0x%x h_tmp = 0x%x chip_info->d_log.loglength_addr = 0x%x chip_info->d_log.loginfo_addr = 0x%x\n", l_tmp, h_tmp, chip_info->d_log.loglength_addr, chip_info->d_log.loginfo_addr);
-        }
-        ret = touch_i2c_write_byte(chip_info->client, 0xff, 0x00);        /* page 0*/
-}
-
 static void synaptics_register_info_read(void * chip_data, uint16_t register_addr, uint8_t * result, uint8_t length)
 {
         int ret = 0;
@@ -3619,8 +3571,6 @@ static struct oppo_touchpanel_operations synaptics_ops = {
         .get_gesture_info           = synaptics_get_gesture_info,
         .mode_switch                = synaptics_mode_switch,
         .get_keycode                = synaptics_get_keycode,
-        .data_logger_get            = synaptics_data_logger_get,
-        .data_logger_open           = synaptics_data_logger_open,
         .register_info_read         = synaptics_register_info_read,
         .get_usb_state              = synaptics_get_usb_state,
         .get_face_state             = synaptics_get_face_state,
@@ -3684,11 +3634,6 @@ static int synaptics_tp_probe(struct i2c_client *client, const struct i2c_device
         if (ret < 0) {
                 goto err_register_driver;
         }
-
-        /*step7: get data logger open status*/
-        mutex_lock(&ts->mutex);
-        synaptics_data_logger_open(chip_info);
-        mutex_unlock(&ts->mutex);
 
         /*step8:create synaptics related proc files*/
         synaptics_create_proc(ts, chip_info->syna_ops);
