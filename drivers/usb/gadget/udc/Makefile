@@ -2,7 +2,8 @@
 # define_trace.h needs to know how to find our header
 CFLAGS_trace.o			:= -I$(src)
 
-udc-core-y			:= core.o trace.o
+udc-core-y			:= core.o
+udc-core-$(CONFIG_DEBUG_KERNEL) += trace.o
 
 #
 # USB peripheral controller drivers
