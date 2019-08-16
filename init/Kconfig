@@ -414,6 +414,15 @@ config SCHED_WALT
 	used to guide task placement as well as task frequency requirements
 	for cpufreq governors.
 
+config SCHED_BOOST
+	bool "Temporary task placement inflation"
+	depends on SCHED_WALT
+	help
+	  Scheduler boost is a mechanism to temporarily place tasks on CPUs
+	  with higher capacity than those where a task would have normally
+	  ended up with their load characteristics. Any entity enabling
+	  boost is responsible for disabling it as well.
+
 config BSD_PROCESS_ACCT
 	bool "BSD Process Accounting"
 	depends on MULTIUSER

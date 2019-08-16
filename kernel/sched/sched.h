@@ -2833,7 +2833,6 @@ static inline int same_freq_domain(int src_cpu, int dst_cpu)
 #define	BOOST_KICK	0
 #define	CPU_RESERVED	1
 
-extern int sched_boost(void);
 extern int preferred_cluster(struct sched_cluster *cluster,
 						struct task_struct *p);
 extern struct sched_cluster *rq_cluster(struct rq *rq);
@@ -2910,10 +2909,6 @@ extern unsigned long thermal_cap(int cpu);
 
 extern void clear_walt_request(int cpu);
 
-extern int got_boost_kick(void);
-extern void clear_boost_kick(int cpu);
-extern enum sched_boost_policy sched_boost_policy(void);
-extern void sched_boost_parse_dt(void);
 extern void clear_ed_task(struct task_struct *p, struct rq *rq);
 extern bool early_detection_notify(struct rq *rq, u64 wallclock);
 
@@ -2923,34 +2918,6 @@ static inline unsigned int power_cost(int cpu, u64 demand)
 }
 
 void note_task_waking(struct task_struct *p, u64 wallclock);
-
-static inline bool task_placement_boost_enabled(struct task_struct *p)
-{
-	if (task_sched_boost(p))
-		return sched_boost_policy() != SCHED_BOOST_NONE;
-
-	return false;
-}
-
-
-static inline enum sched_boost_policy task_boost_policy(struct task_struct *p)
-{
-	enum sched_boost_policy policy = task_sched_boost(p) ?
-							sched_boost_policy() :
-							SCHED_BOOST_NONE;
-	if (policy == SCHED_BOOST_ON_BIG) {
-		/*
-		 * Filter out tasks less than min task util threshold
-		 * under conservative boost.
-		 */
-		if (sysctl_sched_boost == CONSERVATIVE_BOOST &&
-				task_util(p) <=
-				sysctl_sched_min_task_util_for_boost)
-			policy = SCHED_BOOST_NONE;
-	}
-
-	return policy;
-}
 
 extern void walt_map_freq_to_load(void);
 extern void walt_update_min_max_capacity(void);
@@ -2964,29 +2931,8 @@ static inline bool is_min_capacity_cluster(struct sched_cluster *cluster)
 
 struct walt_sched_stats;
 struct related_thread_group;
-struct sched_cluster;
-
-static inline bool task_sched_boost(struct task_struct *p)
-{
-	return false;
-}
-
-static inline bool task_placement_boost_enabled(struct task_struct *p)
-{
-	return false;
-}
 
 static inline void check_for_migration(struct rq *rq, struct task_struct *p) { }
-
-static inline int sched_boost(void)
-{
-	return 0;
-}
-
-static inline enum sched_boost_policy task_boost_policy(struct task_struct *p)
-{
-	return SCHED_BOOST_NONE;
-}
 
 static inline bool
 task_in_cum_window_demand(struct rq *rq, struct task_struct *p)
@@ -3077,20 +3023,6 @@ static inline int is_reserved(int cpu)
 	return 0;
 }
 
-static inline int got_boost_kick(void)
-{
-	return 0;
-}
-
-static inline void clear_boost_kick(int cpu) { }
-
-static inline enum sched_boost_policy sched_boost_policy(void)
-{
-	return SCHED_BOOST_NONE;
-}
-
-static inline void sched_boost_parse_dt(void) { }
-
 static inline void clear_ed_task(struct task_struct *p, struct rq *rq) { }
 
 static inline bool early_detection_notify(struct rq *rq, u64 wallclock)
@@ -3109,6 +3041,72 @@ static inline void note_task_waking(struct task_struct *p, u64 wallclock) { }
 static inline void walt_map_freq_to_load(void) { }
 static inline void walt_update_min_max_capacity(void) { }
 #endif	/* CONFIG_SCHED_WALT */
+
+#ifdef CONFIG_SCHED_BOOST
+extern int sched_boost(void);
+
+extern int got_boost_kick(void);
+extern void clear_boost_kick(int cpu);
+extern enum sched_boost_policy sched_boost_policy(void);
+extern void sched_boost_parse_dt(void);
+
+static inline bool task_placement_boost_enabled(struct task_struct *p)
+{
+	if (task_sched_boost(p))
+		return sched_boost_policy() != SCHED_BOOST_NONE;
+
+	return false;
+}
+
+
+static inline enum sched_boost_policy task_boost_policy(struct task_struct *p)
+{
+	enum sched_boost_policy policy = task_sched_boost(p) ?
+							sched_boost_policy() :
+							SCHED_BOOST_NONE;
+	if (policy == SCHED_BOOST_ON_BIG) {
+		/*
+		 * Filter out tasks less than min task util threshold
+		 * under conservative boost.
+		 */
+		if (sysctl_sched_boost == CONSERVATIVE_BOOST &&
+				task_util(p) <=
+				sysctl_sched_min_task_util_for_boost)
+			policy = SCHED_BOOST_NONE;
+	}
+
+	return policy;
+}
+#else
+static inline bool task_placement_boost_enabled(struct task_struct *p)
+{
+	return false;
+}
+
+static inline int sched_boost(void)
+{
+	return 0;
+}
+
+static inline enum sched_boost_policy task_boost_policy(struct task_struct *p)
+{
+	return SCHED_BOOST_NONE;
+}
+
+static inline int got_boost_kick(void)
+{
+	return 0;
+}
+
+static inline void clear_boost_kick(int cpu) { }
+
+static inline enum sched_boost_policy sched_boost_policy(void)
+{
+	return SCHED_BOOST_NONE;
+}
+
+static inline void sched_boost_parse_dt(void) { }
+#endif /* CONFIG_SCHED_BOOST */
 
 static inline bool energy_aware(void)
 {
