@@ -148,6 +148,7 @@ static int RamWrite32A(struct cam_ois_ctrl_t *o_ctrl,
 {
     int32_t rc = 0;
     int retry = 3;
+    int i;
     struct cam_sensor_i2c_reg_array i2c_write_setting = {
         .reg_addr = addr,
         .reg_data = data,
@@ -167,7 +168,7 @@ static int RamWrite32A(struct cam_ois_ctrl_t *o_ctrl,
         return -EINVAL;
     }
 
-    for(int i = 0; i < retry; i++)
+    for(i = 0; i < retry; i++)
     {
         rc = camera_io_dev_write(&(o_ctrl->io_master_info), &i2c_write);
         if (rc < 0) {
@@ -184,11 +185,12 @@ static int RamRead32A(struct cam_ois_ctrl_t *o_ctrl,
 {
     int32_t rc = 0;
     int retry = 3;
+    int i;
     if (o_ctrl == NULL) {
         CAM_ERR(CAM_OIS, "Invalid Args");
         return -EINVAL;
     }
-    for(int i = 0; i < retry; i++)
+    for(i = 0; i < retry; i++)
     {
         rc = camera_io_dev_read(&(o_ctrl->io_master_info), (uint32_t)addr, (uint32_t *)data,
             CAMERA_SENSOR_I2C_TYPE_WORD, CAMERA_SENSOR_I2C_TYPE_DWORD);

@@ -1815,6 +1815,7 @@ static int32_t cam_cci_write_packet(
     uint8_t *data,
     uint16_t count)
 {
+    int i;
     int32_t rc = 0;
     memset(write_regarray,0,sizeof(write_regarray));
     if (!cci_ctrl || !data)
@@ -1824,7 +1825,7 @@ static int32_t cam_cci_write_packet(
             count);
         count = MAX_WRITE_ARRAY_SIZE;
     }
-    for(int i=0;i<count;i++){
+    for(i=0;i<count;i++){
         write_regarray[i].reg_addr = addr+i;
         write_regarray[i].reg_data = data[i];
         //CAM_ERR(CAM_SENSOR, "cam_cci_write_packet addr = 0x%x,data= 0x%x,count=%d",
@@ -1853,7 +1854,7 @@ static int32_t cam_cci_write_packet(
 
 int32_t cam_cci_control_interface(void* control)
 {
-    int32_t rc = 0,exp_byte;
+    int32_t rc = 0,exp_byte,i;
     struct v4l2_subdev *sd = cam_cci_get_subdev(CCI_DEVICE_1);
     struct cci_device *cci_dev = v4l2_get_subdevdata(sd);
     struct camera_cci_transfer* pControl = (struct camera_cci_transfer*)control;
@@ -1890,7 +1891,7 @@ int32_t cam_cci_control_interface(void* control)
             CAM_ERR(CAM_CCI, "cmd %d,rc=%d", pControl->cmd,rc);
             exp_byte = ((cci_ctrl_interface.cfg.cci_i2c_read_cfg.num_byte / 4) + 1);
             CAM_ERR(CAM_CCI, "songyt read exp byte=%d", exp_byte);
-            for(int i=0;i<exp_byte;i++){
+            for(i=0;i<exp_byte;i++){
                 CAM_ERR(CAM_CCI, "songyt read byte=0x%x,index=%d",
                     cci_ctrl_interface.cfg.cci_i2c_read_cfg.data[i],i);
             }
