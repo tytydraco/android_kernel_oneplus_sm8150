@@ -222,50 +222,13 @@ void operate_mode_switch(struct touchpanel_data *ts)
 
 static void tp_touch_down(struct touchpanel_data *ts, struct point_info points, int touch_report_num, int id)
 {
-    static int last_width_major;
-    static int point_num = 0;
-
     if (ts->input_dev == NULL)
         return;
 
     input_report_key(ts->input_dev, BTN_TOUCH, 1);
     input_report_key(ts->input_dev, BTN_TOOL_FINGER, 1);
-#ifdef CONFIG_TOUCHPANEL_MTK_PLATFORM
-    if (ts->boot_mode == RECOVERY_BOOT)
-#else
-    if (ts->boot_mode == MSM_BOOT_MODE__RECOVERY)
-#endif
-    {
-        input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR, points.z);
-    } else {
-        if (touch_report_num == 1) {
-            input_report_abs(ts->input_dev, ABS_MT_WIDTH_MAJOR, points.width_major);
-            last_width_major = points.width_major;
-        } else if(!(touch_report_num & 0x7f) || touch_report_num == 30) {	//avoid same point info getevent cannot report
-            //if touch_report_num == 127, every 127 points, change width_major
-            //down and keep long time, auto repeat per 5 seconds, for weixing
-            //report move event after down event, for weixing voice delay problem, 30 -> 300ms in order to avoid the intercept by shortcut
-            if (last_width_major == points.width_major) {
-                last_width_major = points.width_major + 1;
-            } else {
-                last_width_major = points.width_major;
-            }
-            input_report_abs(ts->input_dev, ABS_MT_WIDTH_MAJOR, last_width_major);
-        }
-        if (ts->smart_gesture_support && (points.touch_major > 0x12) &&\
-            (points.x > ts->touch_major_limit.width_range) && (points.x < ts->resolution_info.max_x - ts->touch_major_limit.width_range) &&\
-            (points.y > ts->touch_major_limit.height_range) && (points.y < ts->resolution_info.max_y - ts->touch_major_limit.height_range)) {
-            input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR, points.touch_major);
-        }
-        if(!CHK_BIT(ts->irq_slot, (1<<id))) {
-            TPD_DETAIL("first touch point id %d [%4d %4d %4d]\n", id, points.x, points.y, points.z);
-        }
-    }
-
     input_report_abs(ts->input_dev, ABS_MT_POSITION_X, points.x);
     input_report_abs(ts->input_dev, ABS_MT_POSITION_Y, points.y);
-
-    TPD_SPECIFIC_PRINT(point_num, "Touchpanel id %d :Down[%4d %4d %4d]\n", id, points.x, points.y, points.z);
 
 #ifndef TYPE_B_PROTOCOL
     input_mt_sync(ts->input_dev);
@@ -3770,8 +3733,6 @@ static int init_input_device(struct touchpanel_data *ts)
     set_bit(EV_SYN, ts->input_dev->evbit);
     set_bit(EV_ABS, ts->input_dev->evbit);
     set_bit(EV_KEY, ts->input_dev->evbit);
-    set_bit(ABS_MT_TOUCH_MAJOR, ts->input_dev->absbit);
-    set_bit(ABS_MT_WIDTH_MAJOR, ts->input_dev->absbit);
     set_bit(ABS_MT_POSITION_X, ts->input_dev->absbit);
     set_bit(ABS_MT_POSITION_Y, ts->input_dev->absbit);
     set_bit(INPUT_PROP_DIRECT, ts->input_dev->propbit);
@@ -3813,7 +3774,6 @@ static int init_input_device(struct touchpanel_data *ts)
 #ifdef TYPE_B_PROTOCOL
     input_mt_init_slots(ts->input_dev, ts->max_num, 0);
 #endif
-    input_set_abs_params(ts->input_dev, ABS_MT_TOUCH_MAJOR, 0, 255, 0, 0);
     input_set_abs_params(ts->input_dev, ABS_MT_POSITION_X, 0, ts->resolution_info.max_x, 0, 0);
     input_set_abs_params(ts->input_dev, ABS_MT_POSITION_Y, 0, ts->resolution_info.max_y, 0, 0);
     input_set_drvdata(ts->input_dev, ts);
