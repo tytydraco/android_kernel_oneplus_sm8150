@@ -77,11 +77,6 @@ static DECLARE_WAIT_QUEUE_HEAD(waiter);
 static struct input_dev *ps_input_dev = NULL;
 static int lcd_id = 0;
 
-
-/* add haptic audio tp mask */
-struct shake_point record_point[10];
-/* add haptic audio tp mask end */
-
 int sigle_num = 0;
 struct timeval tpstart, tpend;
 int pointx[2] = {0, 0};
@@ -424,7 +419,7 @@ static void tp_touch_release(struct touchpanel_data *ts)
     ts->corner_delay_up = -1;
 }
 
-static bool edge_point_process(struct touchpanel_data *ts, struct point_info points)
+__maybe_unused static bool edge_point_process(struct touchpanel_data *ts, struct point_info points)
 {
     if (ts->limit_edge) {
         if (points.x > ts->edge_limit.left_x2 && points.x < ts->edge_limit.right_x2) {
@@ -450,7 +445,7 @@ static bool edge_point_process(struct touchpanel_data *ts, struct point_info poi
     return false;
 }
 
-static bool corner_point_process(struct touchpanel_data *ts, struct corner_info *corner, struct point_info *points, int i)
+__maybe_unused static bool corner_point_process(struct touchpanel_data *ts, struct corner_info *corner, struct point_info *points, int i)
 {
     int j;
     if (ts->limit_corner) {
@@ -529,112 +524,38 @@ static bool corner_point_process(struct touchpanel_data *ts, struct corner_info 
 static void tp_touch_handle(struct touchpanel_data *ts)
 {
     int i = 0;
-    uint8_t finger_num = 0, touch_near_edge = 0;
+    uint8_t finger_num = 0;
     int obj_attention = 0;
-    struct point_info *points;
-    struct corner_info corner[4];
-    static struct point_info last_point = {.x = 0, .y = 0};
+    struct point_info points[ts->max_num];
     static int touch_report_num = 0;
-    struct msm_drm_notifier notifier_data;
-    /* add haptic audio tp mask */
-    int bank;
-    int record_flag[10] = {0};
-    /* add haptic audio tp mask end */
 
-    if (!ts->ts_ops->get_touch_points) {
-        TPD_INFO("not support ts->ts_ops->get_touch_points callback\n");
+    if (!ts->ts_ops->get_touch_points)
         return;
-    }
 
-    points= kzalloc(sizeof(struct point_info)*ts->max_num, GFP_KERNEL);
-    if (!points) {
-        TPD_INFO("points kzalloc failed\n");
-        return;
-    }
-    memset(corner, 0, sizeof(corner));
-    if (ts->reject_point) {/*sensor will reject point when call mode*/
-       if (ts->touch_count) {
-          #ifdef TYPE_B_PROTOCOL
-          for (i = 0; i < ts->max_num; i++) {
-               input_mt_slot(ts->input_dev, i);
-               input_mt_report_slot_state(ts->input_dev, MT_TOOL_FINGER, 0);
-          }
-          #endif
-          input_report_key(ts->input_dev, BTN_TOUCH, 0);
-          input_report_key(ts->input_dev, BTN_TOOL_FINGER, 0);
-          #ifndef TYPE_B_PROTOCOL
-          input_mt_sync(ts->input_dev);
-          #endif
-          input_sync(ts->input_dev);
-       }
-       kfree(points);
-       return;
-    }
     obj_attention = ts->ts_ops->get_touch_points(ts->chip_data, points, ts->max_num);
     if ((obj_attention & TOUCH_BIT_CHECK) != 0) {
         for (i = 0; i < ts->max_num; i++) {
-            if (((obj_attention & TOUCH_BIT_CHECK) >> i) & 0x01 && (points[i].status == 0)) // buf[0] == 0 is wrong point, no process
+            if (likely(((obj_attention & TOUCH_BIT_CHECK) >> i) & 0x01) &&
+			    unlikely(points[i].status == 0)) // buf[0] == 0 is wrong point, no process
                 continue;
-            if (((obj_attention & TOUCH_BIT_CHECK) >> i) & 0x01 && (points[i].status != 0)) {
-                //Edge process before report abs
-                if (ts->edge_limit_support) {
-                    if (ts->corner_delay_up < 1 && corner_point_process(ts, corner, points, i))
-                        continue;
-                    if (edge_point_process(ts, points[i]))
-                        continue;
-                }
+            if (likely(((obj_attention & TOUCH_BIT_CHECK) >> i) & 0x01) &&
+			    likely(points[i].status != 0)) {
 #ifdef TYPE_B_PROTOCOL
                 input_mt_slot(ts->input_dev, i);
                 input_mt_report_slot_state(ts->input_dev, MT_TOOL_FINGER, 1);
 #endif
                 touch_report_num++;
                 tp_touch_down(ts, points[i], touch_report_num, i);
-                /* add haptic audio tp mask */
-                /*bank = points[i].status;*/
-                bank = i;
-                notifier_data.data = &bank;
-                record_point[i].status = 1;
-                record_point[i].x = points[i].x;
-                record_point[i].y = points[i].y;
-                record_flag[i] = 1;
-                msm_drm_notifier_call_chain(11, &notifier_data);	//down;
-                /* add haptic audio tp mask end */
 
                 SET_BIT(ts->irq_slot, (1<<i));
                 finger_num++;
-                if (points[i].x > ts->resolution_info.max_x / 100 && points[i].x < ts->resolution_info.max_x * 99 / 100) {
-                    ts->view_area_touched = finger_num;
-                } else {
-                    touch_near_edge++;
-                }
-                /*strore  the last point data*/
-                memcpy(&last_point, &points[i], sizeof(struct point_info));
             }
 #ifdef TYPE_B_PROTOCOL
             else {
                 input_mt_slot(ts->input_dev, i);
                 input_mt_report_slot_state(ts->input_dev, MT_TOOL_FINGER, 0);
-                /* add haptic audio tp mask */
-                bank = i;
-                notifier_data.data = &bank;
-                record_point[i].status = 0;
-                msm_drm_notifier_call_chain(10, &notifier_data);    //up;
-                record_flag[i] = 0;
-                /* add haptic audio tp mak */
             }
 #endif
-        }
-
-        if(ts->corner_delay_up > -1) {
-                TPD_DETAIL("corner_delay_up is %d\n", ts->corner_delay_up);
-        }
-        ts->corner_delay_up = ts->corner_delay_up > 0 ? ts->corner_delay_up - 1 : ts->corner_delay_up;
-        if (touch_near_edge == finger_num) {        //means all the touchpoint is near the edge
-            ts->view_area_touched = 0;
-        }
-        if(ts->ear_sense_support && ts->es_enable && (finger_num > ts->touch_count)) {
-            ts->delta_state = TYPE_DELTA_BUSY;
-            queue_work(ts->delta_read_wq, &ts->read_delta_work);
         }
     } else {
         finger_num = 0;
@@ -643,26 +564,13 @@ static void tp_touch_handle(struct touchpanel_data *ts)
         for (i = 0; i < ts->max_num; i++) {
             input_mt_slot(ts->input_dev, i);
             input_mt_report_slot_state(ts->input_dev, MT_TOOL_FINGER, 0);
-            /* add haptic audio tp mask */
-            bank = i;
-            notifier_data.data = &bank;
-            record_point[i].status = 0;
-            msm_drm_notifier_call_chain(0, &notifier_data);
-            /* add haptic audio tp mask end */
         }
 #endif
         tp_touch_up(ts);
-        ts->view_area_touched = 0;
         ts->irq_slot = 0;
-        ts->corner_delay_up = -1;
-        TPD_DETAIL("all touch up,view_area_touched=%d finger_num=%d\n",ts->view_area_touched, finger_num);
-        TPD_DETAIL("last point x:%d y:%d\n", last_point.x, last_point.y);
-        if (ts->edge_limit_support)
-            ts->edge_limit.in_which_area = AREA_NOTOUCH;
     }
     input_sync(ts->input_dev);
     ts->touch_count = finger_num;
-	kfree(points);
 }
 
 static void tp_btnkey_release(struct touchpanel_data *ts)
