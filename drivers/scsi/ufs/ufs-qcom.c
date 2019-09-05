@@ -38,8 +38,7 @@
 /* TODO: further tuning for this parameter may be required */
 #define UFS_QCOM_PM_QOS_UNVOTE_TIMEOUT_US	(10000) /* microseconds */
 
-#define UFS_QCOM_DEFAULT_DBG_PRINT_EN	\
-	(UFS_QCOM_DBG_PRINT_REGS_EN | UFS_QCOM_DBG_PRINT_TEST_BUS_EN)
+#define UFS_QCOM_DEFAULT_DBG_PRINT_EN	(0)
 
 enum {
 	TSTBUS_UAWM,
