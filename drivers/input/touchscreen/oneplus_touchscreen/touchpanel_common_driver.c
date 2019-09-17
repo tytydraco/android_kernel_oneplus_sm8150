@@ -196,10 +196,10 @@ void operate_mode_switch(struct touchpanel_data *ts)
                 ts->ts_ops->mode_switch(ts->chip_data, MODE_GESTURE, false);
         }
         if (ts->edge_limit_support)
-            ts->ts_ops->mode_switch(ts->chip_data, MODE_EDGE, ts->limit_edge);
+            ts->ts_ops->mode_switch(ts->chip_data, MODE_EDGE, false);
 
         if (ts->glove_mode_support)
-            ts->ts_ops->mode_switch(ts->chip_data, MODE_GLOVE, ts->glove_enable);
+            ts->ts_ops->mode_switch(ts->chip_data, MODE_GLOVE, true);
 
         if (ts->charger_pump_support)
             ts->ts_ops->mode_switch(ts->chip_data, MODE_CHARGE, ts->is_usb_checked);
