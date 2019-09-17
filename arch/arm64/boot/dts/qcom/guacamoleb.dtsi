@@ -459,7 +459,7 @@
 	wf_6 {
 		/* WEAK */
 		qcom,effect-id = <6>;
-		qcom,wf-vmax-mv = <2500>;
+		qcom,wf-vmax-mv = <3000>;
 		qcom,wf-pattern = [7e 7e 7e fe fe];
 		qcom,wf-play-rate-us = <6667>;
 		qcom,wf-brake-pattern = [00 00 00 00];
@@ -468,7 +468,7 @@
 	wf_7 {
 		/* MIDDLE */
 		qcom,effect-id = <7>;
-		qcom,wf-vmax-mv = <2500>;
+		qcom,wf-vmax-mv = <3000>;
 		qcom,wf-pattern = [7e 7e 7e 7e fe fe fe];
 		qcom,wf-play-rate-us = <6667>;
 		qcom,wf-brake-pattern = [00 00 00 00];
@@ -477,7 +477,7 @@
 	wf_8 {
 		/* STRONG */
 		qcom,effect-id = <8>;
-		qcom,wf-vmax-mv = <2500>;
+		qcom,wf-vmax-mv = <3000>;
 		qcom,wf-pattern = [7e 7e 7e 7e 7e fe fe fe];
 		qcom,wf-play-rate-us = <6667>;
 		qcom,wf-brake-pattern = [00 00 00 00];
