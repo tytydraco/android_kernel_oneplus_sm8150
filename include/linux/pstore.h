@@ -306,6 +306,12 @@ struct ramoops_context {
 	struct pstore_info pstore;
 };
 
+#ifdef CONFIG_PSTORE_DEVICE_INFO
 void save_dump_reason_to_device_info(char *buf);
+#else
+static inline void save_dump_reason_to_device_info(char *buf)
+{
+}
+#endif
 
 #endif /*_LINUX_PSTORE_H*/
