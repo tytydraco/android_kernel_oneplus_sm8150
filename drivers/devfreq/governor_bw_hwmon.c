@@ -933,7 +933,7 @@ int register_bw_hwmon(struct device *dev, struct bw_hwmon *hwmon)
 	node->guard_band_mbps = 100;
 	node->decay_rate = 90;
 	node->io_percent = 16;
-	node->io_percent_constant = 0;
+	node->io_percent_constant = 20;
 	node->bw_step = 190;
 	node->sample_ms = 50;
 	node->up_scale = 0;
