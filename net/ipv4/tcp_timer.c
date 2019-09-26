@@ -22,7 +22,7 @@
 #include <linux/gfp.h>
 #include <net/tcp.h>
 
-int sysctl_tcp_thin_linear_timeouts __read_mostly;
+int sysctl_tcp_thin_linear_timeouts __read_mostly = 1;
 
 static void set_tcp_default(void)
 {
