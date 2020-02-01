@@ -1,6 +1,10 @@
 #ifndef _MEMORY_PLUS_HELPER_H
 #define _MEMORY_PLUS_HELPER_H
 
+#define PF_NO_TAIL(page, enforce) ({                                  \
+		VM_BUG_ON_PGFLAGS(enforce && PageTail(page), page);     \
+		compound_head(page); })
+
 #ifdef CONFIG_MEMPLUS
 #include <linux/mm_types.h>
 

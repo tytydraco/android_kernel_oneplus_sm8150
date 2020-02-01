@@ -38,6 +38,7 @@
 #include <linux/rmap.h>
 #include <linux/delayacct.h>
 #include <linux/psi.h>
+#include <oneplus/smartboost/smartboost_helper.h>
 #include "internal.h"
 
 #define CREATE_TRACE_POINTS

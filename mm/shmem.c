@@ -1322,9 +1322,9 @@ static int shmem_writepage(struct page *page, struct writeback_control *wbc)
 		SetPageUptodate(page);
 	}
 
-	/* CONFIG_MEMPLUS add start by bin.zhong@ASTI */
+#ifdef CONFIG_MEMPLUS
 	memplus_set_private(page, 1);
-	/* add end */
+#endif
 	swap = get_swap_page(page);
 	if (!swap.val)
 		goto redirty;
