@@ -67,6 +67,12 @@ extern struct fs_struct init_fs;
 #define INIT_CPUTIMER(s)
 #endif
 
+#ifdef CONFIG_MEMPLUS
+#define INIT_RECLAIM_STATE	.reclaim_timeout = 0, .swapin_should_readahead_m = 0, .reclaim_state_lock = __SPIN_LOCK_UNLOCKED(reclaim_state_lock), .memplus_type = 0,
+#else
+#define INIT_RECLAIM_STATE
+#endif
+
 #define INIT_SIGNALS(sig) {						\
 	.nr_threads	= 1,						\
 	.thread_head	= LIST_HEAD_INIT(init_task.thread_node),	\
