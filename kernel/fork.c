@@ -101,6 +101,8 @@
 // tedlin@ASTI 2019/06/12 add for CONFIG_CONTROL_CENTER
 #include <oneplus/control_center/control_center_helper.h>
 
+#include <oneplus/smartboost/smartboost_helper.h>
+
 #include <asm/pgtable.h>
 #include <asm/pgalloc.h>
 #include <linux/uaccess.h>
@@ -1472,9 +1474,9 @@ static int copy_signal(unsigned long clone_flags, struct task_struct *tsk)
 	sig->oom_score_adj = current->signal->oom_score_adj;
 	sig->oom_score_adj_min = current->signal->oom_score_adj_min;
 
-	/* CONFIG_MEMPLUS add start by bin.zhong@ASTI */
+#ifdef CONFIG_MEMPLUS
 	memplus_init_task_reclaim_stat(sig);
-	/* add end */
+#endif
 
 	mutex_init(&sig->cred_guard_mutex);
 

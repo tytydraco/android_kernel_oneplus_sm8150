@@ -76,6 +76,7 @@
 #include "internal.h"
 /* bin.zhong@ASTI add CONFIG_DEFRAG */
 #include <oneplus/defrag/defrag_helper.h>
+#include <oneplus/smartboost/smartboost_helper.h>
 #ifdef CONFIG_ONEPLUS_MEM_MONITOR
 #include <linux/oem/memory_monitor.h>
 #endif

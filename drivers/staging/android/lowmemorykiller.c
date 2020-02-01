@@ -56,6 +56,7 @@
 #include <linux/show_mem_notifier.h>
 /* bin.zhong@ASTI add CONFIG_DEFRAG */
 #include <oneplus/defrag/defrag_helper.h>
+#include <oneplus/smartboost/smartboost_helper.h>
 
 #ifdef CONFIG_HIGHMEM
 #define _ZONE ZONE_HIGHMEM
