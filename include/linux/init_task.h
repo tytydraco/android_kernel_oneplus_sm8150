@@ -18,6 +18,7 @@
 #include <linux/sched/rt.h>
 #include <linux/livepatch.h>
 #include <linux/mm_types.h>
+#include <oneplus/memplus/memplus_helper.h>
 
 #include <asm/thread_info.h>
 
