@@ -63,6 +63,10 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/vmscan.h>
 
+#ifndef CONFIG_MEMPLUS
+#define MEMPLUS_PAGE_LRU LRU_INACTIVE_ANON
+#endif
+
 struct scan_control {
 	/* How many pages shrink_list() should reclaim */
 	unsigned long nr_to_reclaim;
@@ -1177,9 +1181,11 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 						goto activate_locked;
 				}
 
+#ifdef CONFIG_MEMPLUS
 				/* CONFIG_MEMPLUS add start by bin.zhong@.com */
 				memplus_set_private(page, sc->swp_bdv_type);
 				/* add end */
+#endif
 				if (!add_to_swap(page)) {
 					if (!PageTransHuge(page))
 						goto activate_locked;
@@ -1725,6 +1731,7 @@ static unsigned long isolate_lru_pages(unsigned long nr_to_scan,
 		 */
 		scan++;
 
+#ifdef CONFIG_MEMPLUS
 		/* CONFIG_MEMPLUS add start by bin.zhong@ASTI */
 		if (memplus_check_isolate_page(page) &&
 				(BIT(lru) & LRU_ALL_ANON)) {
@@ -1732,6 +1739,7 @@ static unsigned long isolate_lru_pages(unsigned long nr_to_scan,
 			continue;
 		}
 		/* add end */
+#endif
 
 		switch (__isolate_lru_page(page, mode)) {
 		case 0:
@@ -2156,8 +2164,11 @@ static unsigned move_active_pages_to_lru(struct lruvec *lruvec,
 		page = lru_to_page(list);
 		lruvec = mem_cgroup_page_lruvec(page, pgdat);
 
-/* bin.zhong@ASTI add CONFIG_MEMPLUS */
+#ifdef CONFIG_MEMPLUS
+		/* bin.zhong@ASTI add CONFIG_MEMPLUS */
 		memplus_page_to_lru(lru, page);
+#endif
+
 		VM_BUG_ON_PAGE(PageLRU(page), page);
 		SetPageLRU(page);
 
@@ -2425,12 +2436,14 @@ static void get_scan_count(struct lruvec *lruvec, struct mem_cgroup *memcg,
 	unsigned long ap, fp;
 	enum lru_list lru;
 
-    /* CONFIG_MEMPLUS add start by bin.zhong@ASTI */
+#ifdef CONFIG_MEMPLUS
+	/* CONFIG_MEMPLUS add start by bin.zhong@ASTI */
 	if (memplus_enabled()) {
 		scan_balance = SCAN_EQUAL;
 		goto out;
 	}
 	/* add end */
+#endif
 
 	/* If we have no swap space, do not bother scanning anon pages. */
 	if (!sc->may_swap || mem_cgroup_get_nr_swap_pages(memcg) <= 0) {
@@ -2586,6 +2599,7 @@ out:
 		if (!scan && !mem_cgroup_online(memcg))
 			scan = min(size, SWAP_CLUSTER_MAX);
 
+#ifdef CONFIG_MEMPLUS
 		/* CONFIG_MEMPLUS add start by bin.zhong@ASTI */
 		if (memplus_enabled() &&
 			(lru == LRU_INACTIVE_ANON || lru == LRU_ACTIVE_ANON)) {
@@ -2593,6 +2607,7 @@ out:
 			scan = 0;
 		}
 		/* add end */
+#endif
 
 		switch (scan_balance) {
 		case SCAN_EQUAL:
