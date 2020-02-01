@@ -1177,9 +1177,9 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 						goto activate_locked;
 				}
 
-				/* CONFIG_MEMPLUS add start by bin.zhong@.com */
+#ifdef CONFIG_MEMPLUS
 				memplus_set_private(page, sc->swp_bdv_type);
-				/* add end */
+#endif
 				if (!add_to_swap(page)) {
 					if (!PageTransHuge(page))
 						goto activate_locked;
@@ -1436,7 +1436,7 @@ unsigned long reclaim_clean_pages_from_list(struct zone *zone,
 	return ret;
 }
 
-/* bin.zhong@ASTI add for CONFIG_MEMPLUS or CONFIG_SMART_BOOST*/
+#ifdef CONFIG_MEMPLUS
 unsigned long coretech_reclaim_pagelist(struct list_head *page_list,
 	struct vm_area_struct *vma, void *sc)
 {
@@ -1474,7 +1474,6 @@ unsigned long coretech_reclaim_pagelist(struct list_head *page_list,
 	return nr_reclaimed;
 }
 
-#ifdef CONFIG_MEMPLUS
 unsigned long swapout_to_zram(struct list_head *page_list,
 	struct vm_area_struct *vma)
 {
@@ -1508,7 +1507,7 @@ unsigned long swapout_to_disk(struct list_head *page_list,
 }
 #endif
 
-/* bin.zhong@ASTI add for CONFIG_SMART_BOOST */
+#ifdef CONFIG_SMART_BOOST
 static void smart_boost_reclaim_pages(struct lruvec *lruvec,
 					struct pglist_data *pgdat,
 					struct scan_control *sc)
@@ -1532,7 +1531,7 @@ static void smart_boost_reclaim_pages(struct lruvec *lruvec,
 		putback_lru_page(page);
 	}
 }
-
+#endif
 
 #ifdef CONFIG_PROCESS_RECLAIM
 unsigned long reclaim_pages_from_list(struct list_head *page_list,
@@ -1725,13 +1724,13 @@ static unsigned long isolate_lru_pages(unsigned long nr_to_scan,
 		 */
 		scan++;
 
-		/* CONFIG_MEMPLUS add start by bin.zhong@ASTI */
+#ifdef CONFIG_MEMPLUS
 		if (memplus_check_isolate_page(page) &&
 				(BIT(lru) & LRU_ALL_ANON)) {
 			list_move(&page->lru, src);
 			continue;
 		}
-		/* add end */
+#endif
 
 		switch (__isolate_lru_page(page, mode)) {
 		case 0:
@@ -2156,8 +2155,10 @@ static unsigned move_active_pages_to_lru(struct lruvec *lruvec,
 		page = lru_to_page(list);
 		lruvec = mem_cgroup_page_lruvec(page, pgdat);
 
-/* bin.zhong@ASTI add CONFIG_MEMPLUS */
+#ifdef CONFIG_MEMPLUS
 		memplus_page_to_lru(lru, page);
+#endif
+
 		VM_BUG_ON_PAGE(PageLRU(page), page);
 		SetPageLRU(page);
 
@@ -2290,8 +2291,9 @@ static void shrink_active_list(unsigned long nr_to_scan,
 	free_hot_cold_page_list(&l_hold, true);
 	trace_mm_vmscan_lru_shrink_active(pgdat->node_id, nr_taken, nr_activate,
 			nr_deactivate, nr_rotated, sc->priority, file);
-	/* bin.zhong@ASTI add for CONFIG_SMART_BOOST */
+#ifdef CONFIG_SMART_BOOST
 	smart_boost_reclaim_pages(lruvec, pgdat, sc);
+#endif
 }
 
 /*
@@ -2341,12 +2343,12 @@ static bool inactive_list_is_low(struct lruvec *lruvec, bool file,
 	if (!file && !total_swap_pages)
 		return false;
 
-	/* CONFIG_MEMPLUS add start by bin.zhong@oneplus.com */
+#ifdef CONFIG_MEMPLUS
 	if (!file) {
 		inactive_lru = MEMPLUS_PAGE_LRU;
 		active_lru = MEMPLUS_PAGE_LRU + LRU_ACTIVE;
 	}
-	/* add end */
+#endif
 
 	inactive = lruvec_lru_size(lruvec, inactive_lru, sc->reclaim_idx);
 	active = lruvec_lru_size(lruvec, active_lru, sc->reclaim_idx);
@@ -2425,12 +2427,12 @@ static void get_scan_count(struct lruvec *lruvec, struct mem_cgroup *memcg,
 	unsigned long ap, fp;
 	enum lru_list lru;
 
-    /* CONFIG_MEMPLUS add start by bin.zhong@ASTI */
+#ifdef CONFIG_MEMPLUS
 	if (memplus_enabled()) {
 		scan_balance = SCAN_EQUAL;
 		goto out;
 	}
-	/* add end */
+#endif
 
 	/* If we have no swap space, do not bother scanning anon pages. */
 	if (!sc->may_swap || mem_cgroup_get_nr_swap_pages(memcg) <= 0) {
@@ -2586,13 +2588,13 @@ out:
 		if (!scan && !mem_cgroup_online(memcg))
 			scan = min(size, SWAP_CLUSTER_MAX);
 
-		/* CONFIG_MEMPLUS add start by bin.zhong@ASTI */
+#ifdef CONFIG_MEMPLUS
 		if (memplus_enabled() &&
 			(lru == LRU_INACTIVE_ANON || lru == LRU_ACTIVE_ANON)) {
 			size = 0;
 			scan = 0;
 		}
-		/* add end */
+#endif
 
 		switch (scan_balance) {
 		case SCAN_EQUAL:
@@ -2663,10 +2665,13 @@ static void shrink_node_memcg(struct pglist_data *pgdat, struct mem_cgroup *memc
 
 	blk_start_plug(&plug);
 
-	/* CONFIG_MEMPLUS modify start by bin.zhong@ASTI */
+#ifdef CONFIG_MEMPLUS
 	while (nr[MEMPLUS_PAGE_LRU] || nr[LRU_ACTIVE_FILE] ||
-			 nr[LRU_INACTIVE_FILE]) {
-    /* modify end */
+					nr[LRU_INACTIVE_FILE]) {
+#else
+	while (nr[LRU_INACTIVE_ANON] || nr[LRU_ACTIVE_FILE] ||
+					nr[LRU_INACTIVE_FILE]) {
+#endif
 		unsigned long nr_anon, nr_file, percentage;
 		unsigned long nr_scanned;
 
@@ -2693,10 +2698,12 @@ static void shrink_node_memcg(struct pglist_data *pgdat, struct mem_cgroup *memc
 		 * proportional to the original scan target.
 		 */
 		nr_file = nr[LRU_INACTIVE_FILE] + nr[LRU_ACTIVE_FILE];
-		/* CONFIG_MEMPLUS modify start by bin.zhong@ASTI */
+#ifdef CONFIG_MEMPLUS
 		lru = MEMPLUS_PAGE_LRU;
 		nr_anon = nr[lru] + nr[lru + LRU_ACTIVE];
-		/* modify end */
+#else
+		nr_anon = nr[LRU_INACTIVE_ANON] + nr[LRU_ACTIVE_ANON];
+#endif
 
 		/*
 		 * It's just vindictive to attack the larger once the smaller
@@ -2708,8 +2715,14 @@ static void shrink_node_memcg(struct pglist_data *pgdat, struct mem_cgroup *memc
 			break;
 
 		if (nr_file > nr_anon) {
+#ifdef CONFIG_MEMPLUS
 			unsigned long scan_target = targets[lru] +
 						targets[lru + LRU_ACTIVE] + 1;
+#else
+			unsigned long scan_target = targets[LRU_INACTIVE_ANON] +
+						targets[LRU_ACTIVE_ANON] + 1;
+			lru = LRU_BASE;
+#endif
 			percentage = nr_anon * 100 / scan_target;
 		} else {
 			unsigned long scan_target = targets[LRU_INACTIVE_FILE] +
@@ -2727,9 +2740,11 @@ static void shrink_node_memcg(struct pglist_data *pgdat, struct mem_cgroup *memc
 		 * scan target and the percentage scanning already complete
 		 */
 
-		/* CONFIG_MEMPLUS modify start by bin.zhong@ASTI */
+#ifdef CONFIG_MEMPLUS
 		lru = (lru == LRU_FILE) ? MEMPLUS_PAGE_LRU : LRU_FILE;
-		/* CONFIG_MEMPLUS modify end */
+#else
+		lru = (lru == LRU_FILE) ? LRU_BASE : LRU_FILE;
+#endif
 		nr_scanned = targets[lru] - nr[lru];
 		nr[lru] = targets[lru] * (100 - percentage) / 100;
 		nr[lru] -= min(nr[lru], nr_scanned);
@@ -2749,10 +2764,13 @@ static void shrink_node_memcg(struct pglist_data *pgdat, struct mem_cgroup *memc
 	 * rebalance the anon lru active/inactive ratio.
 	 */
 	if (inactive_list_is_low(lruvec, false, memcg, sc, true))
-		/* CONFIG_MEMPLUS modify start by bin.zhong@ASTI */
+#ifdef CONFIG_MEMPLUS
 		shrink_active_list(SWAP_CLUSTER_MAX, lruvec,
 				   sc, MEMPLUS_PAGE_LRU + LRU_ACTIVE);
-		/* modify end */
+#else
+		shrink_active_list(SWAP_CLUSTER_MAX, lruvec,
+				   sc, LRU_ACTIVE_ANON);
+#endif
 }
 
 /* Use reclaim/compaction for costly allocs or under memory pressure */
@@ -3434,10 +3452,13 @@ static void age_active_anon(struct pglist_data *pgdat,
 		struct lruvec *lruvec = mem_cgroup_lruvec(pgdat, memcg);
 
 		if (inactive_list_is_low(lruvec, false, memcg, sc, true))
-			/* CONFIG_MEMPLUS modify start by bin.zhong@ASTI */
+#ifdef CONFIG_MEMPLUS
 			shrink_active_list(SWAP_CLUSTER_MAX, lruvec,
 					   sc, MEMPLUS_PAGE_LRU + LRU_ACTIVE);
-			/* modify end */
+#else
+			shrink_active_list(SWAP_CLUSTER_MAX, lruvec,
+					   sc, LRU_ACTIVE_ANON);
+#endif
 
 		memcg = mem_cgroup_iter(NULL, memcg, NULL);
 	} while (memcg);

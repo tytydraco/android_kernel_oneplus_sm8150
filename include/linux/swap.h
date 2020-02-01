@@ -13,8 +13,10 @@
 #include <linux/atomic.h>
 #include <linux/page-flags.h>
 #include <asm/page.h>
-/* bin.zhong@ASTI add for CONFIG_SMART_BOOST */
+
+#ifdef CONFIG_SMART_BOOST
 #include <oneplus/smartboost/smartboost_helper.h>
+#endif
 
 struct notifier_block;
 
@@ -452,23 +454,20 @@ extern bool has_usable_swap(void);
 /* Swap 50% full? Release swapcache more aggressively.. */
 static inline bool vm_swap_full(void)
 {
-	/*
-	 * CONFIG_MEMPLUS add start by bin.zhong@ASTI
-	 * don't bother replace any swapcache only entries
-	 */
+#ifdef CONFIG_MEMPLUS
 	if (__memplus_enabled())
 		return false;
-	/* add end */
+#endif
 
 	return atomic_long_read(&nr_swap_pages) * 2 < total_swap_pages;
 }
 
 static inline long get_nr_swap_pages(void)
 {
-    /* CONFIG_MEMPLUS add start by bin.zhong@ASTI */
+#ifdef CONFIG_MEMPLUS
 	if (__memplus_enabled())
 		return 0;
-	/* add end */
+#endif
 
 	return atomic_long_read(&nr_swap_pages);
 }

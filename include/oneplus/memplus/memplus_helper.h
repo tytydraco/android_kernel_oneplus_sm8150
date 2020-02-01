@@ -54,16 +54,6 @@ do {	\
 
 #define memplus_page_to_lru(lru, page) (lru = page_lru(page))
 #else
-static __always_inline
-void memplus_move_swapcache_to_anon_lru(struct page *page)
-{
-	clear_bit(PG_swapcache, &(PF_NO_TAIL(page, 1))->flags);
-}
-static __always_inline
-void memplus_move_anon_to_swapcache_lru(struct page *page)
-{
-	set_bit(PG_swapcache, &(PF_NO_TAIL(page, 1))->flags);
-}
 #define memplus_init_task_reclaim_stat(sig)
 #define __memplus_clear_entry(entry)
 #define __memplus_entry(bdev_flag)

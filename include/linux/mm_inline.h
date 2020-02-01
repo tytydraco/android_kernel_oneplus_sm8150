@@ -4,6 +4,7 @@
 
 #include <linux/huge_mm.h>
 #include <linux/swap.h>
+#include <oneplus/smartboost/smartboost_helper.h>
 
 /**
  * page_is_file_cache - should the page be on a file LRU or anon LRU?
@@ -80,10 +81,10 @@ static inline enum lru_list page_lru_base_type(struct page *page)
 {
 	if (page_is_file_cache(page))
 		return LRU_INACTIVE_FILE;
-	/* CONFIG_MEMPLUS add start by bin.zhong@ASTI */
+#ifdef CONFIG_MEMPLUS
 	if (PageSwapCache(page))
 		return MEMPLUS_PAGE_LRU;
-	/* add end */
+#endif
 	return LRU_INACTIVE_ANON;
 }
 
