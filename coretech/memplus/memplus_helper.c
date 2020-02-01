@@ -2,9 +2,6 @@
 #include <linux/page-flags.h>
 
 static struct memplus_cb_set cb_set;
-#define PF_NO_TAIL(page, enforce) ({                                  \
-		VM_BUG_ON_PGFLAGS(enforce && PageTail(page), page);     \
-		compound_head(page); })
 
 bool memplus_enabled(void)
 {

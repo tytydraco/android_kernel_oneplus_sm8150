@@ -1054,10 +1054,9 @@ static int __set_oom_adj(struct file *file, int oom_adj, bool legacy)
 		}
 	}
 
-	/* CONFIG_MEMPLUS add start by bin.zhong@ATSI */
+#ifdef CONFIG_MEMPLUS
 	memplus_state_check(legacy, oom_adj, task, 0, 0);
-	/* add end */
-
+#endif
 	task->signal->oom_score_adj = oom_adj;
 #ifdef CONFIG_ADJ_CHAIN
 	adj_chain_update_oom_score_adj(task);

@@ -19,6 +19,7 @@
 #include <linux/ratelimit.h>
 #include <linux/list_lru.h>
 #include <trace/events/writeback.h>
+#include <oneplus/smartboost/smartboost_helper.h>
 #include "internal.h"
 
 /*

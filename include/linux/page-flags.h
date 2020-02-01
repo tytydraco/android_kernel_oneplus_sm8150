@@ -351,7 +351,7 @@ static __always_inline int PageSwapCache(struct page *page)
 	return PageSwapBacked(page) && test_bit(PG_swapcache, &page->flags);
 
 }
-/* CONFIG_MEMPLUS modify start by bin.zhong@ASTI */
+#ifdef CONFIG_MEMPLUS
 #include <oneplus/memplus/memplus_helper.h>
 static __always_inline void ClearPageSwapCache(struct page *page)
 {
@@ -362,7 +362,15 @@ static __always_inline void SetPageSwapCache(struct page *page)
 {
 	memplus_move_anon_to_swapcache_lru(page);
 }
-/* modify end */
+#else
+static __always_inline void ClearPageSwapCache(struct page *page)
+{
+}
+
+static __always_inline void SetPageSwapCache(struct page *page)
+{
+}
+#endif
 #else
 PAGEFLAG_FALSE(SwapCache)
 #endif
