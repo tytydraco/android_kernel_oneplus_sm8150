@@ -122,12 +122,16 @@ uint8_t ccp_rsn_oui_11[HDD_RSN_OUI_SIZE] = {0x00, 0x0F, 0xAC, 0x11};
 uint8_t ccp_rsn_oui_12[HDD_RSN_OUI_SIZE] = {0x50, 0x6F, 0x9A, 0x02};
 uint8_t ccp_rsn_oui_0b[HDD_RSN_OUI_SIZE] = {0x00, 0x0F, 0xAC, 0x0B};
 uint8_t ccp_rsn_oui_0c[HDD_RSN_OUI_SIZE] = {0x00, 0x0F, 0xAC, 0x0C};
+/* FT-SUITE-B AKM */
+uint8_t ccp_rsn_oui_0d[HDD_RSN_OUI_SIZE] = {0x00, 0x0F, 0xAC, 0x0D};
 
 /* OWE https://tools.ietf.org/html/rfc8110 */
 uint8_t ccp_rsn_oui_18[HDD_RSN_OUI_SIZE] = {0x00, 0x0F, 0xAC, 0x12};
 
 #ifdef WLAN_FEATURE_SAE
+/* SAE AKM */
 uint8_t ccp_rsn_oui_80[HDD_RSN_OUI_SIZE] = {0x00, 0x0F, 0xAC, 0x08};
+/* FT SAE AKM */
 uint8_t ccp_rsn_oui_90[HDD_RSN_OUI_SIZE] = {0x00, 0x0F, 0xAC, 0x09};
 #endif
 
@@ -1393,6 +1397,10 @@ static void hdd_send_association_event(struct net_device *dev,
 		     eCSR_AUTH_TYPE_FT_RSN_PSK)
 		    || (roam_profile->AuthType.authType[0] ==
 			eCSR_AUTH_TYPE_FT_RSN)
+		    || (roam_profile->AuthType.authType[0] ==
+			eCSR_AUTH_TYPE_FT_SAE)
+		    || (roam_profile->AuthType.authType[0] ==
+			eCSR_AUTH_TYPE_FT_SUITEB_EAP_SHA384)
 #ifdef FEATURE_WLAN_ESE
 		    || (roam_profile->AuthType.authType[0] ==
 			eCSR_AUTH_TYPE_CCKM_RSN)
@@ -1767,6 +1775,8 @@ static QDF_STATUS hdd_dis_connect_handler(struct hdd_adapter *adapter,
 		 * by kernel
 		 */
 		if (sendDisconInd) {
+			int reason = WLAN_REASON_UNSPECIFIED;
+
 			if (roam_info && roam_info->disconnect_ies) {
 				disconnect_ies.data =
 					roam_info->disconnect_ies->data;
@@ -1777,28 +1787,21 @@ static QDF_STATUS hdd_dis_connect_handler(struct hdd_adapter *adapter,
 			 * To avoid wpa_supplicant sending "HANGED" CMD
 			 * to ICS UI.
 			 */
-			if (eCSR_ROAM_LOSTLINK == roamStatus) {
-				if (roam_info->reasonCode ==
+			if (roam_info && eCSR_ROAM_LOSTLINK == roamStatus) {
+				reason = roam_info->reasonCode;
+				if (reason ==
 				    eSIR_MAC_PEER_STA_REQ_LEAVING_BSS_REASON)
 					pr_info("wlan: disconnected due to poor signal, rssi is %d dB\n",
 						roam_info->rxRssi);
-				wlan_hdd_cfg80211_indicate_disconnect(
-							dev, false,
-							roam_info->reasonCode,
-							disconnect_ies.data,
-							disconnect_ies.len);
-			} else {
-				wlan_hdd_cfg80211_indicate_disconnect(
-							dev, false,
-							WLAN_REASON_UNSPECIFIED,
-							disconnect_ies.data,
-							disconnect_ies.len);
 			}
+			wlan_hdd_cfg80211_indicate_disconnect(
+							dev, false,
+							reason,
+							disconnect_ies.data,
+							disconnect_ies.len);
 
 			hdd_debug("sent disconnected event to nl80211, reason code %d",
-				(eCSR_ROAM_LOSTLINK == roamStatus) ?
-				roam_info->reasonCode :
-				WLAN_REASON_UNSPECIFIED);
+				  reason);
 		}
 
 		/* update P2P connection status */
@@ -1807,18 +1810,19 @@ static QDF_STATUS hdd_dis_connect_handler(struct hdd_adapter *adapter,
 
 	hdd_wmm_adapter_clear(adapter);
 	mac_handle = hdd_ctx->mac_handle;
+
 	sme_ft_reset(mac_handle, adapter->session_id);
 	sme_reset_key(mac_handle, adapter->session_id);
-	if (!hdd_remove_beacon_filter(adapter)) {
-		if (sme_is_beacon_report_started(mac_handle,
-						 adapter->session_id)) {
-			hdd_beacon_recv_pause_indication((hdd_handle_t)hdd_ctx,
-							 adapter->session_id,
-							 SCAN_EVENT_TYPE_MAX,
-							 true);
-		}
-	}
 
+	if (hdd_remove_beacon_filter(adapter))
+		hdd_err("hdd_remove_beacon_filter() failed");
+
+	if (sme_is_beacon_report_started(mac_handle, adapter->session_id)) {
+		hdd_debug("Sending beacon pause indication to userspace");
+		hdd_beacon_recv_pause_indication((hdd_handle_t)hdd_ctx,
+						 adapter->session_id,
+						 SCAN_EVENT_TYPE_MAX, true);
+	}
 	if (eCSR_ROAM_IBSS_LEAVE == roamStatus) {
 		uint8_t i;
 
@@ -1884,11 +1888,13 @@ static QDF_STATUS hdd_dis_connect_handler(struct hdd_adapter *adapter,
 	* eConnectionState_Connecting state mean that connection is in
 	* progress so no need to set state to eConnectionState_NotConnected
 	*/
-	if ((eConnectionState_Connecting != sta_ctx->conn_info.connState)) {
+	if (eConnectionState_Connecting != sta_ctx->conn_info.connState)
 		 hdd_conn_set_connection_state(adapter,
 					       eConnectionState_NotConnected);
-		 hdd_set_roaming_in_progress(false);
-	}
+
+	/* Clear roaming in progress flag */
+	hdd_set_roaming_in_progress(false);
+
 	pmo_ucfg_flush_gtk_offload_req(adapter->vdev);
 
 	if ((QDF_STA_MODE == adapter->device_mode) ||
@@ -2249,7 +2255,7 @@ void hdd_save_gtk_params(struct hdd_adapter *adapter,
 		kek_len = csr_roam_info->fils_join_rsp->kek_len;
 	}
 
-	wlan_hdd_save_gtk_offload_params(adapter, NULL, kek, kek_len,
+	wlan_hdd_save_gtk_offload_params(adapter, NULL, 0, kek, kek_len,
 					 csr_roam_info->replay_ctr, true);
 
 	hdd_debug("Kek len %d", kek_len);
@@ -2268,7 +2274,7 @@ void hdd_save_gtk_params(struct hdd_adapter *adapter,
 	kek = csr_roam_info->kek;
 	kek_len = csr_roam_info->kek_len;
 
-	wlan_hdd_save_gtk_offload_params(adapter, NULL, kek, kek_len,
+	wlan_hdd_save_gtk_offload_params(adapter, NULL, 0, kek, kek_len,
 					 csr_roam_info->replay_ctr, true);
 
 	hdd_debug("Kek len %d", kek_len);
@@ -2776,13 +2782,6 @@ hdd_association_completion_handler(struct hdd_adapter *adapter,
 	 */
 	hdd_reset_scan_reject_params(hdd_ctx, roamStatus, roamResult);
 
-	/*
-	 * Enable roaming on other STA iface except this one.
-	 * Firmware dosent support connection on one STA iface while
-	 * roaming on other STA iface
-	 */
-	wlan_hdd_enable_roaming(adapter);
-
 	/* HDD has initiated disconnect, do not send connect result indication
 	 * to kernel as it will be handled by __cfg80211_disconnect.
 	 */
@@ -2809,6 +2808,13 @@ hdd_association_completion_handler(struct hdd_adapter *adapter,
 			hdd_conn_set_connection_state(adapter,
 						   eConnectionState_Associated);
 		}
+
+		/*
+		 * Enable roaming on other STA iface except this one.
+		 * Firmware dosent support connection on one STA iface while
+		 * roaming on other STA iface
+		 */
+		wlan_hdd_enable_roaming(adapter);
 
 		/* Save the connection info from CSR... */
 		hdd_conn_save_connect_info(adapter, roam_info,
@@ -3052,10 +3058,14 @@ hdd_association_completion_handler(struct hdd_adapter *adapter,
 				assocReqlen = 0;
 			}
 
-			if (roam_info->u.pConnectedProfile->AuthType ==
-			    eCSR_AUTH_TYPE_FT_RSN
-			    || roam_info->u.pConnectedProfile->AuthType ==
-			    eCSR_AUTH_TYPE_FT_RSN_PSK) {
+			if ((roam_info->u.pConnectedProfile->AuthType ==
+			     eCSR_AUTH_TYPE_FT_RSN) ||
+			    (roam_info->u.pConnectedProfile->AuthType ==
+			     eCSR_AUTH_TYPE_FT_RSN_PSK) ||
+			    (roam_info->u.pConnectedProfile->AuthType ==
+			     eCSR_AUTH_TYPE_FT_SAE) ||
+			    (roam_info->u.pConnectedProfile->AuthType ==
+			     eCSR_AUTH_TYPE_FT_SUITEB_EAP_SHA384)) {
 				if (ft_carrier_on) {
 					if (!hddDisconInProgress &&
 						roam_info->pBssDesc) {
@@ -3447,6 +3457,13 @@ hdd_association_completion_handler(struct hdd_adapter *adapter,
 		if (roamStatus == eCSR_ROAM_ASSOCIATION_FAILURE ||
 		    roamStatus == eCSR_ROAM_CANCELLED) {
 			ucfg_tdls_notify_connect_failure(hdd_ctx->psoc);
+
+			/*
+			 * Enable roaming on other STA iface except this one.
+			 * Firmware dosent support connection on one STA iface
+			 * while roaming on other STA iface
+			 */
+			wlan_hdd_enable_roaming(adapter);
 		}
 
 		/*
@@ -5001,6 +5018,9 @@ static void hdd_translate_sae_rsn_to_csr_auth(int8_t auth_suite[4],
 {
 	if (qdf_mem_cmp(auth_suite, ccp_rsn_oui_80, 4) == 0)
 		*auth_type = eCSR_AUTH_TYPE_SAE;
+	else if (qdf_mem_cmp(auth_suite, ccp_rsn_oui_90, 4) == 0)
+		*auth_type = eCSR_AUTH_TYPE_FT_SAE;
+
 }
 #else
 static inline void hdd_translate_sae_rsn_to_csr_auth(int8_t auth_suite[4],
@@ -5052,6 +5072,9 @@ eCsrAuthType hdd_translate_rsn_to_csr_auth_type(uint8_t auth_suite[4])
 	} else if (memcmp(auth_suite, ccp_rsn_oui_0c, 4) == 0) {
 		/* Check for Suite B EAP 384 */
 		auth_type = eCSR_AUTH_TYPE_SUITEB_EAP_SHA384;
+	} else if (memcmp(auth_suite, ccp_rsn_oui_0d, 4) == 0) {
+		/* Check for FT Suite B EAP 384 */
+		auth_type = eCSR_AUTH_TYPE_FT_SUITEB_EAP_SHA384;
 	} else {
 		hdd_translate_fils_rsn_to_csr_auth(auth_suite, &auth_type);
 		hdd_translate_sae_rsn_to_csr_auth(auth_suite, &auth_type);
@@ -5604,8 +5627,21 @@ int hdd_set_csr_auth_type(struct hdd_adapter *adapter,
 				/* Suite B EAP SHA 384 */
 				roam_profile->AuthType.authType[0] =
 					eCSR_AUTH_TYPE_SUITEB_EAP_SHA384;
+			} else if ((RSNAuthType == eCSR_AUTH_TYPE_FT_SAE) &&
+				   ((key_mgmt & HDD_AUTH_KEY_MGMT_802_1X) ==
+				    HDD_AUTH_KEY_MGMT_802_1X)) {
+				roam_profile->AuthType.authType[0] =
+						eCSR_AUTH_TYPE_FT_SAE;
+			} else if ((RSNAuthType ==
+				  eCSR_AUTH_TYPE_FT_SUITEB_EAP_SHA384) &&
+				  ((key_mgmt & HDD_AUTH_KEY_MGMT_802_1X)
+				  == HDD_AUTH_KEY_MGMT_802_1X)) {
+				/* FT Suite-B EAP SHA 384 */
+				roam_profile->AuthType.authType[0] =
+					eCSR_AUTH_TYPE_FT_SUITEB_EAP_SHA384;
+
 			} else if ((key_mgmt & HDD_AUTH_KEY_MGMT_802_1X)
-			    == HDD_AUTH_KEY_MGMT_802_1X) {
+				    == HDD_AUTH_KEY_MGMT_802_1X) {
 				roam_profile->AuthType.authType[0] =
 					eCSR_AUTH_TYPE_RSN;
 			} else
@@ -5626,7 +5662,12 @@ int hdd_set_csr_auth_type(struct hdd_adapter *adapter,
 		break;
 
 	case eCSR_AUTH_TYPE_SAE:
-		roam_profile->AuthType.authType[0] = eCSR_AUTH_TYPE_SAE;
+
+		if (RSNAuthType == eCSR_AUTH_TYPE_FT_SAE)
+			roam_profile->AuthType.authType[0] =
+						eCSR_AUTH_TYPE_FT_SAE;
+		else
+			roam_profile->AuthType.authType[0] = eCSR_AUTH_TYPE_SAE;
 		break;
 
 	default:
