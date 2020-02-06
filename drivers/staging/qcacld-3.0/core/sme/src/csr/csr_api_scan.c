@@ -1666,7 +1666,7 @@ static void csr_save_tx_power_to_cfg(tpAniSirGlobal pMac, tDblLinkList *pList,
 				ch_pwr_set++;
 			}
 		} else {
-			if (cbLen >= dataLen) {
+			if (cbLen + sizeof(tSirMacChanInfo) >= dataLen) {
 				/* this entry will overflow our allocation */
 				sme_err(
 					"Buffer overflow, start %d, num %d, offset %d",
@@ -2222,6 +2222,10 @@ static enum wlan_auth_type csr_covert_auth_type_new(eCsrAuthType auth)
 		return WLAN_AUTH_TYPE_SUITEB_EAP_SHA384;
 	case eCSR_AUTH_TYPE_SAE:
 		return WLAN_AUTH_TYPE_SAE;
+	case eCSR_AUTH_TYPE_FT_SAE:
+		return WLAN_AUTH_TYPE_FT_SAE;
+	case eCSR_AUTH_TYPE_FT_SUITEB_EAP_SHA384:
+		return WLAN_AUTH_TYPE_FT_SUITEB_EAP_SHA384;
 	case eCSR_NUM_OF_SUPPORT_AUTH_TYPE:
 	default:
 		return WLAN_AUTH_TYPE_OPEN_SYSTEM;
@@ -2281,6 +2285,10 @@ static eCsrAuthType csr_covert_auth_type_old(enum wlan_auth_type auth)
 		return eCSR_AUTH_TYPE_SUITEB_EAP_SHA384;
 	case WLAN_AUTH_TYPE_SAE:
 		return eCSR_AUTH_TYPE_SAE;
+	case WLAN_AUTH_TYPE_FT_SAE:
+		return eCSR_AUTH_TYPE_FT_SAE;
+	case WLAN_AUTH_TYPE_FT_SUITEB_EAP_SHA384:
+		return eCSR_AUTH_TYPE_FT_SUITEB_EAP_SHA384;
 	case WLAN_NUM_OF_SUPPORT_AUTH_TYPE:
 	default:
 		return eCSR_AUTH_TYPE_OPEN_SYSTEM;
@@ -2438,6 +2446,31 @@ static enum wlan_phymode csr_convert_dotllmod_phymode(eCsrPhyMode dotllmode)
 	return con_phy_mode;
 }
 
+#ifdef WLAN_ADAPTIVE_11R
+/**
+ * csr_update_adaptive_11r_scan_filter - Copy adaptive 11r ini to scan
+ * module
+ * @mac_ctx: Pointer to mac_context
+ * @scan_filter: Scan filter to be sent to scan module
+ *
+ * Return: None
+ */
+static void
+csr_update_adaptive_11r_scan_filter(tpAniSirGlobal mac_ctx,
+				    struct scan_filter *filter)
+{
+	filter->enable_adaptive_11r =
+		mac_ctx->roam.configParam.enable_adaptive_11r;
+}
+#else
+static inline void
+csr_update_adaptive_11r_scan_filter(tpAniSirGlobal mac_ctx,
+				    struct scan_filter *filter)
+{
+	filter->enable_adaptive_11r = false;
+}
+#endif
+
 static QDF_STATUS csr_prepare_scan_filter(tpAniSirGlobal mac_ctx,
 	tCsrScanResultFilter *pFilter, struct scan_filter *filter)
 {
@@ -2546,6 +2579,9 @@ static QDF_STATUS csr_prepare_scan_filter(tpAniSirGlobal mac_ctx,
 		filter->bss_scoring_required = true;
 	else
 		filter->bss_scoring_required = false;
+
+	csr_update_adaptive_11r_scan_filter(mac_ctx, filter);
+
 	if (!pFilter->BSSIDs.numOfBSSIDs) {
 		if (policy_mgr_map_concurrency_mode(
 		   &pFilter->csrPersona, &new_mode)) {
@@ -2715,6 +2751,7 @@ static QDF_STATUS csr_fill_bss_from_scan_entry(tpAniSirGlobal mac_ctx,
 			  IEEE80211_FC0_SUBTYPE_PROBE_RESP);
 	bss_desc->seq_ctrl = hdr->seqControl;
 	bss_desc->tsf_delta = scan_entry->tsf_delta;
+	bss_desc->adaptive_11r_ap = scan_entry->adaptive_11r_ap;
 
 	qdf_mem_copy((uint8_t *) &bss_desc->ieFields,
 		ie_ptr, ie_len);
@@ -3169,15 +3206,6 @@ void csr_init_occupied_channels_list(tpAniSirGlobal mac_ctx,
 		return;
 	}
 
-	if (!csr_neighbor_roam_is_new_connected_profile(mac_ctx, sessionId)) {
-		/*
-		 * Do not flush occupied list since current roam profile matches
-		 * previous
-		 */
-		sme_debug("Current roam profile matches prev");
-		return;
-	}
-
 	profile = &mac_ctx->roam.roamSession[sessionId].connectedProfile;
 	if (!profile)
 		return;
@@ -3199,6 +3227,7 @@ void csr_init_occupied_channels_list(tpAniSirGlobal mac_ctx,
 	filter->ssid_list[0].length = profile->SSID.length;
 	qdf_mem_copy(filter->ssid_list[0].ssid, profile->SSID.ssId,
 		     profile->SSID.length);
+	csr_update_pmf_cap_from_connected_profile(profile, filter);
 
 	pdev = wlan_objmgr_get_pdev_by_id(mac_ctx->psoc, 0, WLAN_LEGACY_MAC_ID);
 
