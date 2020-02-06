@@ -114,8 +114,13 @@ typedef uint8_t tSirVersionString[SIR_VERSION_STRING_LEN];
 #define SIR_KRK_KEY_LEN 16
 #define SIR_BTK_KEY_LEN 32
 #define SIR_KCK_KEY_LEN 16
+#define KCK_192BIT_KEY_LEN 24
+#define KCK_256BIT_KEY_LEN 32
+
 #define SIR_KEK_KEY_LEN 16
 #define SIR_KEK_KEY_LEN_FILS 64
+#define KEK_256BIT_KEY_LEN 32
+
 #define SIR_REPLAY_CTR_LEN 8
 #define SIR_PMK_LEN  48
 #define SIR_PMKID_LEN 16
@@ -132,6 +137,15 @@ typedef uint8_t tSirVersionString[SIR_VERSION_STRING_LEN];
 #define SIR_UAPSD_GET(ac, mask)      (((mask) & (SIR_UAPSD_FLAG_ ## ac)) >> SIR_UAPSD_BITOFFSET_ ## ac)
 
 #endif
+
+/*
+ * AKM suites supported by firmware for roaming
+ */
+#define AKM_FT_SAE           0
+#define AKM_FT_SUITEB_SHA384 1
+#define AKM_FT_FILS          2
+#define AKM_SAE              3
+#define AKM_OWE              4
 
 /**
  * enum sir_roam_op_code - Operation to be done by the callback.
@@ -216,6 +230,7 @@ struct wlan_mlme_chain_cfg {
 
 /**
  * struct wlan_beacon_report - Beacon info to be send to userspace
+ * @vdev_id: vdev id
  * @ssid: ssid present in beacon
  * @bssid: bssid present in beacon
  * @frequency: channel frequency in MHz
@@ -224,6 +239,7 @@ struct wlan_mlme_chain_cfg {
  * @boot_time: Boot time when beacon received
  */
 struct wlan_beacon_report {
+	uint8_t vdev_id;
 	struct wlan_ssid ssid;
 	struct qdf_mac_addr bssid;
 	uint32_t frequency;
@@ -440,10 +456,15 @@ typedef struct sSirSmeReadyReq {
 	uint16_t length;
 	uint16_t transactionId;
 	void *csr_roam_synch_cb;
+	QDF_STATUS (*csr_roam_auth_event_handle_cb)(tpAniSirGlobal mac,
+						    uint8_t vdev_id,
+						    struct qdf_mac_addr bssid);
 	void *pe_roam_synch_cb;
 	void *stop_roaming_cb;
 	QDF_STATUS (*sme_msg_cb)(tpAniSirGlobal mac,
 				 struct scheduler_msg *msg);
+	QDF_STATUS (*pe_disconnect_cb) (tpAniSirGlobal mac,
+					uint8_t vdev_id);
 } tSirSmeReadyReq, *tpSirSmeReadyReq;
 
 /**
@@ -757,6 +778,7 @@ struct bss_description {
 	uint8_t WscIeProbeRsp[WSCIE_PROBE_RSP_LEN];
 	uint8_t reservedPadding4;
 	uint32_t tsf_delta;
+	uint32_t adaptive_11r_ap;
 #ifdef WLAN_FEATURE_FILS_SK
 	struct fils_ind_elements fils_info_element;
 #endif
@@ -1069,12 +1091,14 @@ typedef struct sSirSmeJoinReq {
 	tAniEdType UCEncryptionType;
 
 	tAniEdType MCEncryptionType;
+	enum ani_akm_type akm;
 
 #ifdef WLAN_FEATURE_11W
 	tAniEdType MgmtEncryptionType;
 #endif
 
 	bool is11Rconnection;
+	bool is_adaptive_11r_connection;
 #ifdef FEATURE_WLAN_ESE
 	bool isESEFeatureIniEnabled;
 	bool isESEconnection;
@@ -2384,6 +2408,18 @@ struct sir_create_session {
 	struct qdf_mac_addr bss_id;
 };
 
+/**
+ * struct sir_delete_session - Used for deleting session in monitor mode
+ * @type: SME host message type.
+ * @msg_len: Length of the message.
+ * @vdev_id: vdev id.
+ */
+struct sir_delete_session {
+	uint16_t type;
+	uint16_t msg_len;
+	uint8_t vdev_id;
+};
+
 /* Beacon Interval */
 typedef struct sSirChangeBIParams {
 	uint16_t messageType;
@@ -2660,12 +2696,12 @@ typedef struct {
 	uint32_t authentication;
 	uint8_t encryption;
 	uint8_t mcencryption;
+	tAniEdType gp_mgmt_cipher_suite;
 	uint8_t ChannelCount;
 	uint8_t ChannelCache[SIR_ROAM_MAX_CHANNELS];
 #ifdef WLAN_FEATURE_11W
 	bool mfp_enabled;
 #endif
-
 } tSirRoamNetworkType;
 
 typedef struct SirMobilityDomainInfo {
@@ -2945,6 +2981,10 @@ typedef struct sSirRoamOffloadScanReq {
 	struct pmkid_mode_bits pmkid_modes;
 	uint32_t roam_preauth_retry_count;
 	uint32_t roam_preauth_no_ack_timeout;
+
+	/* Idle/Disconnect roam parameters */
+	struct wmi_idle_roam_params idle_roam_params;
+	struct wmi_disconnect_roam_params disconnect_roam_params;
 #endif
 	struct roam_ext_params roam_params;
 	uint8_t  middle_of_roaming;
@@ -2969,6 +3009,7 @@ typedef struct sSirRoamOffloadScanReq {
 	uint32_t btm_sticky_time;
 	uint32_t rct_validity_timer;
 	uint32_t disassoc_timer_threshold;
+	uint32_t btm_trig_min_candidate_score;
 	struct wmi_11k_offload_params offload_11k_params;
 	uint32_t ho_delay_for_rx;
 	uint32_t min_delay_btw_roam_scans;
@@ -2978,7 +3019,13 @@ typedef struct sSirRoamOffloadScanReq {
 	bool bss_load_trig_enabled;
 	struct wmi_bss_load_config bss_load_config;
 	bool roaming_scan_policy;
+	uint32_t roam_scan_inactivity_time;
+	uint32_t roam_inactive_data_packet_count;
+	uint32_t roam_scan_period_after_inactivity;
 	uint32_t full_roam_scan_period;
+	struct roam_trigger_min_rssi min_rssi_params[NUM_OF_ROAM_TRIGGERS];
+	struct roam_trigger_score_delta score_delta_param[NUM_OF_ROAM_TRIGGERS];
+	bool is_adaptive_11r_connection;
 } tSirRoamOffloadScanReq, *tpSirRoamOffloadScanReq;
 
 typedef struct sSirRoamOffloadScanRsp {
@@ -3934,7 +3981,8 @@ typedef struct sSirSmeRoamOffloadSynchInd {
 	uint8_t rssi;
 	uint8_t roamReason;
 	uint32_t chan_freq;
-	uint8_t kck[SIR_KCK_KEY_LEN];
+	uint8_t kck[KCK_256BIT_KEY_LEN];
+	uint8_t kck_len;
 	uint32_t kek_len;
 	uint8_t kek[SIR_KEK_KEY_LEN_FILS];
 	uint32_t   pmk_len;
@@ -3979,6 +4027,29 @@ struct sir_wisa_params {
 	uint8_t vdev_id;
 };
 
+/**
+ * typedef enum wifi_scan_flags - wifi scan flags
+ * @WIFI_SCAN_FLAG_INTERRUPTED: Indicates that scan results are not complete
+ *				because probes were not sent on some channels
+ */
+typedef enum {
+	WIFI_SCAN_FLAG_INTERRUPTED = 1,
+} wifi_scan_flags;
+
+typedef enum {
+	WIFI_BAND_UNSPECIFIED,
+	WIFI_BAND_BG = 1,       /* 2.4 GHz */
+	WIFI_BAND_A = 2,        /* 5 GHz without DFS */
+	WIFI_BAND_ABG = 3,      /* 2.4 GHz + 5 GHz; no DFS */
+	WIFI_BAND_A_DFS_ONLY = 4,       /* 5 GHz DFS only */
+	/* 5 is reserved */
+	WIFI_BAND_A_WITH_DFS = 6,       /* 5 GHz with DFS */
+	WIFI_BAND_ABG_WITH_DFS = 7,     /* 2.4 GHz + 5 GHz with DFS */
+
+	/* Keep it last */
+	WIFI_BAND_MAX
+} tWifiBand;
+
 #ifdef FEATURE_WLAN_EXTSCAN
 
 #define WLAN_EXTSCAN_MAX_CHANNELS                 36
@@ -4010,29 +4081,6 @@ typedef enum {
 	/* Keep this last */
 	eSIR_EXTSCAN_CALLBACK_TYPE_MAX,
 } tSirExtScanCallbackType;
-
-/**
- * typedef enum wifi_scan_flags - wifi scan flags
- * @WIFI_SCAN_FLAG_INTERRUPTED: Indicates that scan results are not complete
- *				because probes were not sent on some channels
- */
-typedef enum {
-	WIFI_SCAN_FLAG_INTERRUPTED = 1,
-} wifi_scan_flags;
-
-typedef enum {
-	WIFI_BAND_UNSPECIFIED,
-	WIFI_BAND_BG = 1,       /* 2.4 GHz */
-	WIFI_BAND_A = 2,        /* 5 GHz without DFS */
-	WIFI_BAND_ABG = 3,      /* 2.4 GHz + 5 GHz; no DFS */
-	WIFI_BAND_A_DFS_ONLY = 4,       /* 5 GHz DFS only */
-	/* 5 is reserved */
-	WIFI_BAND_A_WITH_DFS = 6,       /* 5 GHz with DFS */
-	WIFI_BAND_ABG_WITH_DFS = 7,     /* 2.4 GHz + 5 GHz with DFS */
-
-	/* Keep it last */
-	WIFI_BAND_MAX
-} tWifiBand;
 
 /**
  * enum wifi_extscan_event_type - extscan event type
