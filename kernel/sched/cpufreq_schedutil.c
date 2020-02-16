@@ -362,8 +362,8 @@ static void sugov_walt_adjust(struct sugov_cpu *sg_cpu, unsigned long *util,
 	if (unlikely(!sysctl_sched_use_walt_cpu_util))
 		return;
 
-	if (sg_policy->tunables->pl)
-		*util = max(*util, sg_cpu->walt_load.pl);
+	if (sg_policy->tunables->pl && sg_cpu->walt_load.pl > *util)
+		*util = (*util + sg_cpu->walt_load.pl) / 2;
 }
 
 static void sugov_update_single(struct update_util_data *hook, u64 time,
