@@ -113,7 +113,8 @@ void __blk_complete_request(struct request *req)
 		/* Check the request flags and see if we should do an IPI */
 		if (test_bit(QUEUE_FLAG_SAME_FORCE, &q->queue_flags) ||
 			(test_bit(QUEUE_FLAG_SAME_READ, &q->queue_flags) &&
-			rq_data_dir(req) == READ))
+			rq_data_dir(req) == READ &&
+			!idle_cpu(completion_cpu)))
 			do_local = false;
 		else
 			do_local = cpus_share_cache(this_cpu, completion_cpu);
