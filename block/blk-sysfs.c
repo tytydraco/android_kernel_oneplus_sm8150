@@ -17,6 +17,10 @@
 #include "blk-mq-debugfs.h"
 #include "blk-wbt.h"
 
+#define SAME_COMP_BIT	(1 << 0)
+#define SAME_FORCE_BIT	(1 << 1)
+#define SAME_READ_BIT	(1 << 2)
+
 struct queue_sysfs_entry {
 	struct attribute attr;
 	ssize_t (*show)(struct request_queue *, char *);
@@ -376,8 +380,17 @@ static ssize_t queue_rq_affinity_show(struct request_queue *q, char *page)
 {
 	bool set = test_bit(QUEUE_FLAG_SAME_COMP, &q->queue_flags);
 	bool force = test_bit(QUEUE_FLAG_SAME_FORCE, &q->queue_flags);
+	bool read = test_bit(QUEUE_FLAG_SAME_READ, &q->queue_flags);
+	unsigned long val = 0;
 
-	return queue_var_show(set << force, page);
+	if (set)
+		val |= SAME_COMP_BIT;
+	if (force)
+		val |= SAME_FORCE_BIT;
+	if (read)
+		val |= SAME_READ_BIT;
+
+	return queue_var_show(val, page);
 }
 
 static ssize_t
@@ -392,16 +405,22 @@ queue_rq_affinity_store(struct request_queue *q, const char *page, size_t count)
 		return ret;
 
 	spin_lock_irq(q->queue_lock);
-	if (val == 2) {
+
+	if (val & SAME_COMP_BIT)
 		queue_flag_set(QUEUE_FLAG_SAME_COMP, q);
-		queue_flag_set(QUEUE_FLAG_SAME_FORCE, q);
-	} else if (val == 1) {
-		queue_flag_set(QUEUE_FLAG_SAME_COMP, q);
-		queue_flag_clear(QUEUE_FLAG_SAME_FORCE, q);
-	} else if (val == 0) {
+	else
 		queue_flag_clear(QUEUE_FLAG_SAME_COMP, q);
+
+	if (val & SAME_FORCE_BIT)
+		queue_flag_set(QUEUE_FLAG_SAME_FORCE, q);
+	else
 		queue_flag_clear(QUEUE_FLAG_SAME_FORCE, q);
-	}
+
+	if (val & SAME_READ_BIT)
+		queue_flag_set(QUEUE_FLAG_SAME_READ, q);
+	else
+		queue_flag_clear(QUEUE_FLAG_SAME_READ, q);
+
 	spin_unlock_irq(q->queue_lock);
 #endif
 	return ret;
