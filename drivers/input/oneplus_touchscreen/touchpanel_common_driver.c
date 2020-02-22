@@ -4653,7 +4653,7 @@ int register_common_touch_device(struct touchpanel_data *pdata)
     ts->gesture_enable = 0;
     ts->es_enable = 0;
     ts->fd_enable = 0;
-    ts->palm_enable = 1;
+    ts->palm_enable = 0;
     ts->touch_count = 0;
     ts->glove_enable = 0;
     ts->view_area_touched = 0;
