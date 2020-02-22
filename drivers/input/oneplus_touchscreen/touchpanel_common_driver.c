@@ -4666,7 +4666,7 @@ int register_common_touch_device(struct touchpanel_data *pdata)
     ts->skip_reset_in_resume = false;
     ts->irq_slot = 0;
 	ts->touch_hold_enable = 0;
-	ts->lcd_refresh_rate = 0;
+	ts->lcd_refresh_rate = 1;
 	ts->reject_point = 0;
 	ts->charge_detect = 0;
     ts->firmware_update_type = 0;
