@@ -178,6 +178,9 @@ void operate_mode_switch(struct touchpanel_data *ts)
         } else
             ts->ts_ops->mode_switch(ts->chip_data, MODE_SLEEP, true);
     } else {
+	if (ts->game_switch_support)
+            ts->ts_ops->mode_switch(ts->chip_data, MODE_GAME, true);
+
         if (ts->ear_sense_support) {
             ts->ts_ops->mode_switch(ts->chip_data, MODE_EARSENSE, ts->es_enable == 1);
             ts->ts_ops->mode_switch(ts->chip_data, MODE_PALM_REJECTION, ts->palm_enable);
