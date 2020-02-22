@@ -4612,13 +4612,8 @@ int register_common_touch_device(struct touchpanel_data *pdata)
 
     //step 19: charge pump support
     if (ts->charger_pump_support) {
-        if (ts->ts_ops->get_usb_state) {
-            ts->is_usb_checked = !!ts->ts_ops->get_usb_state();
-        } else {
-            ts->is_usb_checked = 0;
-        }
         TPD_INFO("curent usb state is %d\n", ts->is_usb_checked);
-        ret = ts->ts_ops->mode_switch(ts->chip_data, MODE_CHARGE, ts->is_usb_checked);
+        ret = ts->ts_ops->mode_switch(ts->chip_data, MODE_CHARGE, true);
         if (ret < 0) {
             TPD_INFO("switch charge mode failed\n");
         }
@@ -4668,7 +4663,7 @@ int register_common_touch_device(struct touchpanel_data *pdata)
 	ts->touch_hold_enable = 0;
 	ts->lcd_refresh_rate = 1;
 	ts->reject_point = 0;
-	ts->charge_detect = 0;
+	ts->charge_detect = 1;
     ts->firmware_update_type = 0;
     ts->corner_delay_up = -1;
     if(ts->is_noflash_ic) {
