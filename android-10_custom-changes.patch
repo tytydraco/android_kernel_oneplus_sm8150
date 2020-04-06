@@ -1,0 +1,546 @@
+From 05a9b5d1cfcfc3afb1090478cd1f1dc7b235085e Mon Sep 17 00:00:00 2001
+From: Tyler Nijmeh <tylernij@gmail.com>
+Date: Wed, 12 Feb 2020 13:39:37 -0800
+Subject: [PATCH 1/4] drm/msm/sde: Force fingerprint state to pressed
+
+This fixes custom rom HALs that do not work with the standard
+fingerprint driver.
+
+Signed-off-by: Tyler Nijmeh <tylernij@gmail.com>
+---
+ drivers/gpu/drm/msm/sde/sde_crtc.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/drivers/gpu/drm/msm/sde/sde_crtc.c b/drivers/gpu/drm/msm/sde/sde_crtc.c
+index 5c8da2441bd1..02577aeb891c 100644
+--- a/drivers/gpu/drm/msm/sde/sde_crtc.c
++++ b/drivers/gpu/drm/msm/sde/sde_crtc.c
+@@ -5899,6 +5899,9 @@ static int sde_crtc_onscreenfinger_atomic_check(struct sde_crtc_state *cstate,
+ 		cstate->fingerprint_dim_layer = NULL;
+ 	}
+ 
++	display->panel->dim_status = fp_mode;
++	cstate->fingerprint_pressed = fp_mode;
++
+ 	return 0;
+ }
+ 
+-- 
+2.20.1
+
+
+From 85c38ee34a0f176926dfa427330f2cf8d85d20f0 Mon Sep 17 00:00:00 2001
+From: dianlujitao <dianlujitao@lineageos.org>
+Date: Fri, 6 Jul 2018 00:06:54 +0200
+Subject: [PATCH 2/4] input: touchscreen: Expose every possible gesture
+
+Change-Id: I967893f8fe2797cf67d34aa81040be835d030e82
+---
+ .../oneplus_touchscreen/touchpanel_common.h   |  16 ++
+ .../touchpanel_common_driver.c                | 265 +++++++++++-------
+ 2 files changed, 177 insertions(+), 104 deletions(-)
+
+diff --git a/drivers/input/oneplus_touchscreen/touchpanel_common.h b/drivers/input/oneplus_touchscreen/touchpanel_common.h
+index 80e623d64051..bc3011185b1d 100755
+--- a/drivers/input/oneplus_touchscreen/touchpanel_common.h
++++ b/drivers/input/oneplus_touchscreen/touchpanel_common.h
+@@ -59,6 +59,22 @@
+ #define SingleTap           15  // single tap
+ #define Sgestrue            14  // S
+ 
++#define KEY_GESTURE_W               246
++#define KEY_GESTURE_M               247
++#define KEY_GESTURE_S               248
++#define KEY_DOUBLE_TAP              KEY_WAKEUP
++#define KEY_GESTURE_CIRCLE          250
++#define KEY_GESTURE_TWO_SWIPE       251
++#define KEY_GESTURE_UP_ARROW        252
++#define KEY_GESTURE_LEFT_ARROW      253
++#define KEY_GESTURE_RIGHT_ARROW     254
++#define KEY_GESTURE_DOWN_ARROW      255
++#define KEY_GESTURE_SWIPE_LEFT      KEY_F5
++#define KEY_GESTURE_SWIPE_DOWN      KEY_F6
++#define KEY_GESTURE_SWIPE_RIGHT     KEY_F7
++#define KEY_GESTURE_SWIPE_UP        KEY_F8
++#define KEY_GESTURE_SINGLE_TAP      KEY_F9
++
+ #define BIT0 (0x1 << 0)
+ #define BIT1 (0x1 << 1)
+ #define BIT2 (0x1 << 2)
+diff --git a/drivers/input/oneplus_touchscreen/touchpanel_common_driver.c b/drivers/input/oneplus_touchscreen/touchpanel_common_driver.c
+index 569e28cf881d..00b85f478d40 100755
+--- a/drivers/input/oneplus_touchscreen/touchpanel_common_driver.c
++++ b/drivers/input/oneplus_touchscreen/touchpanel_common_driver.c
+@@ -60,7 +60,7 @@ unsigned int tp_debug = 0;
+ unsigned int tp_register_times = 0;
+ //unsigned int probe_time = 0;
+ struct touchpanel_data *g_tp = NULL;
+-int tp_1v8_power = 0;
++int tp_1v8_power = 1;
+ static DECLARE_WAIT_QUEUE_HEAD(waiter);
+ static struct input_dev *ps_input_dev = NULL;
+ static int lcd_id = 0;
+@@ -79,10 +79,15 @@ int pointy[2] = {0, 0};
+ 
+ uint8_t DouTap_enable = 0;				 // double tap
+ uint8_t UpVee_enable  = 0;				 // V
++uint8_t DownVee_enable  = 0;			 // ^
+ uint8_t LeftVee_enable = 0; 			 // >
+ uint8_t RightVee_enable = 0;			 // <
+ uint8_t Circle_enable = 0;				 // O
+ uint8_t DouSwip_enable = 0; 			 // ||
++uint8_t Left2RightSwip_enable = 0;		 // -->
++uint8_t Right2LeftSwip_enable = 0;		 // <--
++uint8_t Up2DownSwip_enable = 0;			 // |v
++uint8_t Down2UpSwip_enable = 0;			 // |^
+ uint8_t Mgestrue_enable = 0;			 // M
+ uint8_t Wgestrue_enable = 0;			 // W
+ uint8_t Sgestrue_enable = 0;			 // S
+@@ -359,6 +364,8 @@ int sec_double_tap(struct gesture_info *gesture)
+ static void tp_gesture_handle(struct touchpanel_data *ts)
+ {
+     struct gesture_info gesture_info_temp;
++    bool enabled = false;
++    int key = -1;
+ 
+     if (!ts->ts_ops->get_gesture_info) {
+         TPD_INFO("not support ts->ts_ops->get_gesture_info callback\n");
+@@ -392,22 +399,76 @@ static void tp_gesture_handle(struct touchpanel_data *ts)
+             gesture_info_temp.gesture_type == SingleTap ? "(single tap)" :
+             gesture_info_temp.gesture_type == Wgestrue ? "(W)" : "unknown");
+ 
+-	if ((gesture_info_temp.gesture_type == DouTap && DouTap_enable) ||
+-		(gesture_info_temp.gesture_type == UpVee && UpVee_enable) ||
+-		(gesture_info_temp.gesture_type ==  LeftVee&& LeftVee_enable) ||
+-		(gesture_info_temp.gesture_type == RightVee && RightVee_enable) ||
+-		(gesture_info_temp.gesture_type == Circle && Circle_enable) ||
+-		(gesture_info_temp.gesture_type == DouSwip && DouSwip_enable) ||
+-		(gesture_info_temp.gesture_type == Mgestrue && Mgestrue_enable) ||
+-		(gesture_info_temp.gesture_type == Sgestrue && Sgestrue_enable) ||
+-		(gesture_info_temp.gesture_type == SingleTap && SingleTap_enable) ||
+-		(gesture_info_temp.gesture_type == Wgestrue && Wgestrue_enable)) {
+-        memcpy(&ts->gesture, &gesture_info_temp, sizeof(struct gesture_info));
+-        input_report_key(ts->input_dev, KEY_F4, 1);
+-        input_sync(ts->input_dev);
+-        input_report_key(ts->input_dev, KEY_F4, 0);
+-        input_sync(ts->input_dev);
+-    }
++	switch (gesture_info_temp.gesture_type) {
++		case DouTap:
++			enabled = DouTap_enable;
++			key = KEY_DOUBLE_TAP;
++			break;
++		case UpVee:
++			enabled = UpVee_enable;
++			key = KEY_GESTURE_UP_ARROW;
++			break;
++		case DownVee:
++			enabled = DownVee_enable;
++			key = KEY_GESTURE_DOWN_ARROW;
++			break;
++		case LeftVee:
++			enabled = LeftVee_enable;
++			key = KEY_GESTURE_LEFT_ARROW;
++			break;
++		case RightVee:
++			enabled = RightVee_enable;
++			key = KEY_GESTURE_RIGHT_ARROW;
++			break;
++		case Circle:
++			enabled = Circle_enable;
++			key = KEY_GESTURE_CIRCLE;
++			break;
++		case DouSwip:
++			enabled = DouSwip_enable;
++			key = KEY_GESTURE_TWO_SWIPE;
++			break;
++		case Left2RightSwip:
++			enabled = Left2RightSwip_enable;
++			key = KEY_GESTURE_SWIPE_LEFT;
++			break;
++		case Right2LeftSwip:
++			enabled = Right2LeftSwip_enable;
++			key = KEY_GESTURE_SWIPE_RIGHT;
++			break;
++		case Up2DownSwip:
++			enabled = Up2DownSwip_enable;
++			key = KEY_GESTURE_SWIPE_UP;
++			break;
++		case Down2UpSwip:
++			enabled = Down2UpSwip_enable;
++			key = KEY_GESTURE_SWIPE_DOWN;
++			break;
++		case Mgestrue:
++			enabled = Mgestrue_enable;
++			key = KEY_GESTURE_M;
++			break;
++		case Sgestrue:
++			enabled = Sgestrue_enable;
++			key = KEY_GESTURE_S;
++			break;
++		case SingleTap:
++			enabled = SingleTap_enable;
++			key = KEY_GESTURE_SINGLE_TAP;
++			break;
++		case Wgestrue:
++			enabled = Wgestrue_enable;
++			key = KEY_GESTURE_W;
++			break;
++	}
++
++	if (enabled) {
++		memcpy(&ts->gesture, &gesture_info_temp, sizeof(struct gesture_info));
++		input_report_key(ts->input_dev, key, 1);
++		input_sync(ts->input_dev);
++		input_report_key(ts->input_dev, key, 0);
++		input_sync(ts->input_dev);
++	}
+ }
+ 
+ void tp_touch_btnkey_release(void)
+@@ -1087,80 +1148,6 @@ void switch_usb_state(int usb_state)
+ }
+ EXPORT_SYMBOL(switch_usb_state);
+ 
+-/*
+- *    gesture_enable = 0 : disable gesture
+- *    gesture_enable = 1 : enable gesture when ps is far away
+- *    gesture_enable = 2 : disable gesture when ps is near
+- */
+-static ssize_t proc_gesture_control_write(struct file *file, const char __user *buffer, size_t count, loff_t *ppos)
+-{
+-    int value = 0;
+-    char buf[4] = {0};
+-    struct touchpanel_data *ts = PDE_DATA(file_inode(file));
+-
+-    if (count > 2)
+-        return count;
+-    if (!ts)
+-        return count;
+-
+-    if (copy_from_user(buf, buffer, count)) {
+-        TPD_INFO("%s: read proc input error.\n", __func__);
+-        return count;
+-    }
+-	TPD_DEBUG("%s write argc1[0x%x],argc2[0x%x]\n",__func__,buf[0],buf[1]);
+-	UpVee_enable = (buf[0] & BIT0)?1:0;
+-	DouSwip_enable = (buf[0] & BIT1)?1:0;
+-	LeftVee_enable = (buf[0] & BIT3)?1:0;
+-	RightVee_enable = (buf[0] & BIT4)?1:0;
+-	Circle_enable = (buf[0] & BIT6)?1:0;
+-	DouTap_enable = (buf[0] & BIT7)?1:0;
+-	Sgestrue_enable = (buf[1] & BIT0)?1:0;
+-	Mgestrue_enable	= (buf[1] & BIT1)?1:0;
+-	Wgestrue_enable = (buf[1] & BIT2)?1:0;
+-	SingleTap_enable = (buf[1] & BIT3)?1:0;
+-	Enable_gesture = (buf[1] & BIT7)?1:0;
+-
+-	if (UpVee_enable || DouSwip_enable || LeftVee_enable || RightVee_enable
+-		|| Circle_enable || DouTap_enable || Sgestrue_enable || Mgestrue_enable
+-		|| Wgestrue_enable || SingleTap_enable || Enable_gesture) {
+-		value = 1;
+-	} else {
+-		value = 0;
+-	}
+-
+-    mutex_lock(&ts->mutex);
+-    if (ts->gesture_enable != value) {
+-        ts->gesture_enable = value;
+-		tp_1v8_power = ts->gesture_enable;
+-        TPD_INFO("%s: gesture_enable = %d, is_suspended = %d\n", __func__, ts->gesture_enable, ts->is_suspended);
+-        if (ts->is_incell_panel && (ts->suspend_state == TP_RESUME_EARLY_EVENT) && (ts->tp_resume_order == LCD_TP_RESUME)) {
+-            TPD_INFO("tp will resume, no need mode_switch in incell panel\n"); /*avoid i2c error or tp rst pulled down in lcd resume*/
+-        } else if (ts->is_suspended)
+-            operate_mode_switch(ts);
+-    }else {
+-        TPD_INFO("%s: do not do same operator :%d\n", __func__, value);
+-    }
+-    mutex_unlock(&ts->mutex);
+-
+-    return count;
+-}
+-
+-static ssize_t proc_gesture_control_read(struct file *file, char __user *user_buf, size_t count, loff_t *ppos)
+-{
+-    int ret = 0;
+-    char page[4] = {0};
+-    struct touchpanel_data *ts = PDE_DATA(file_inode(file));
+-
+-    if (!ts)
+-        return count;
+-
+-    TPD_DEBUG("gesture_enable is: %d\n", ts->gesture_enable);
+-    ret = sprintf(page, "%d\n", ts->gesture_enable);
+-    ret = simple_read_from_buffer(user_buf, count, ppos, page, strlen(page));
+-
+-    return ret;
+-}
+-
+ static ssize_t proc_coordinate_read(struct file *file, char __user *user_buf, size_t count, loff_t *ppos)
+ {
+     int ret = 0;
+@@ -1181,13 +1168,6 @@ static ssize_t proc_coordinate_read(struct file *file, char __user *user_buf, si
+     return ret;
+ }
+ 
+-static const struct file_operations proc_gesture_control_fops = {
+-    .write = proc_gesture_control_write,
+-    .read  = proc_gesture_control_read,
+-    .open  = simple_open,
+-    .owner = THIS_MODULE,
+-};
+-
+ static const struct file_operations proc_coordinate_fops = {
+     .read  = proc_coordinate_read,
+     .open  = simple_open,
+@@ -2226,6 +2206,57 @@ static ssize_t sec_update_fw_show(struct device *dev,
+ 
+ static DEVICE_ATTR(tp_fw_update, 0644, sec_update_fw_show, sec_update_fw_store);
+ 
++#define GESTURE_ATTR(name, out) \
++	static ssize_t name##_enable_read_func(struct file *file, char __user *user_buf, size_t count, loff_t *ppos) \
++	{ \
++		int ret = 0; \
++		char page[PAGESIZE]; \
++		ret = sprintf(page, "%d\n", out); \
++		ret = simple_read_from_buffer(user_buf, count, ppos, page, strlen(page)); \
++		return ret; \
++	} \
++	static ssize_t name##_enable_write_func(struct file *file, const char __user *user_buf, size_t count, loff_t *ppos) \
++	{ \
++		int enabled = 0; \
++		char page[PAGESIZE] = {0}; \
++		copy_from_user(page, user_buf, count); \
++		sscanf(page, "%d", &enabled); \
++		out = enabled > 0 ? 1 : 0; \
++		return count; \
++	} \
++	static const struct file_operations name##_enable_proc_fops = { \
++	    .write = name##_enable_write_func, \
++	    .read =  name##_enable_read_func, \
++	    .open = simple_open, \
++	    .owner = THIS_MODULE, \
++	};
++
++GESTURE_ATTR(single_tap, SingleTap_enable);
++GESTURE_ATTR(double_tap, DouTap_enable);
++GESTURE_ATTR(up_arrow, UpVee_enable);
++GESTURE_ATTR(down_arrow, DownVee_enable);
++GESTURE_ATTR(left_arrow, LeftVee_enable);
++GESTURE_ATTR(right_arrow, RightVee_enable);
++GESTURE_ATTR(double_swipe, DouSwip_enable);
++GESTURE_ATTR(up_swipe, Up2DownSwip_enable);
++GESTURE_ATTR(down_swipe, Down2UpSwip_enable);
++GESTURE_ATTR(left_swipe, Left2RightSwip_enable);
++GESTURE_ATTR(right_swipe, Right2LeftSwip_enable);
++GESTURE_ATTR(letter_o, Circle_enable);
++GESTURE_ATTR(letter_w, Wgestrue_enable);
++GESTURE_ATTR(letter_m, Mgestrue_enable);
++GESTURE_ATTR(letter_s, Sgestrue_enable);
++
++#define CREATE_PROC_NODE(PARENT, NAME, MODE) \
++	prEntry_tmp = proc_create(#NAME, MODE, PARENT, &NAME##_proc_fops); \
++	if (prEntry_tmp == NULL) { \
++		ret = -ENOMEM; \
++		TPD_INFO("%s: Couldn't create proc entry, %d\n", __func__, __LINE__); \
++	}
++
++#define CREATE_GESTURE_NODE(NAME) \
++	CREATE_PROC_NODE(prEntry_tp, NAME##_enable, 0666)
++
+ static int init_touchpanel_proc(struct touchpanel_data *ts)
+ {
+     int ret = 0;
+@@ -2280,11 +2311,22 @@ static int init_touchpanel_proc(struct touchpanel_data *ts)
+ 
+     //proc files-step2-4:/proc/touchpanel/double_tap_enable (black gesture related interface)
+     if (ts->black_gesture_support) {
+-        prEntry_tmp = proc_create_data("gesture_enable", 0666, prEntry_tp, &proc_gesture_control_fops, ts);
+-        if (prEntry_tmp == NULL) {
+-            ret = -ENOMEM;
+-            TPD_INFO("%s: Couldn't create proc entry, %d\n", __func__, __LINE__);
+-        }
++        CREATE_GESTURE_NODE(single_tap);
++        CREATE_GESTURE_NODE(double_tap);
++        CREATE_GESTURE_NODE(up_arrow);
++        CREATE_GESTURE_NODE(down_arrow);
++        CREATE_GESTURE_NODE(left_arrow);
++        CREATE_GESTURE_NODE(right_arrow);
++        CREATE_GESTURE_NODE(double_swipe);
++        CREATE_GESTURE_NODE(up_swipe);
++        CREATE_GESTURE_NODE(down_swipe);
++        CREATE_GESTURE_NODE(left_swipe);
++        CREATE_GESTURE_NODE(right_swipe);
++        CREATE_GESTURE_NODE(letter_o);
++        CREATE_GESTURE_NODE(letter_w);
++        CREATE_GESTURE_NODE(letter_m);
++        CREATE_GESTURE_NODE(letter_s);
++
+         prEntry_tmp = proc_create_data("coordinate", 0444, prEntry_tp, &proc_coordinate_fops, ts);
+         if (prEntry_tmp == NULL) {
+             ret = -ENOMEM;
+@@ -3701,6 +3743,21 @@ static int init_input_device(struct touchpanel_data *ts)
+     set_bit(BTN_TOUCH, ts->input_dev->keybit);
+     if (ts->black_gesture_support) {
+         set_bit(KEY_F4, ts->input_dev->keybit);
++        set_bit(KEY_GESTURE_W, ts->input_dev->keybit);
++        set_bit(KEY_GESTURE_M, ts->input_dev->keybit);
++        set_bit(KEY_GESTURE_S, ts->input_dev->keybit);
++        set_bit(KEY_DOUBLE_TAP, ts->input_dev->keybit);
++        set_bit(KEY_GESTURE_CIRCLE, ts->input_dev->keybit);
++        set_bit(KEY_GESTURE_TWO_SWIPE, ts->input_dev->keybit);
++        set_bit(KEY_GESTURE_UP_ARROW, ts->input_dev->keybit);
++        set_bit(KEY_GESTURE_LEFT_ARROW, ts->input_dev->keybit);
++        set_bit(KEY_GESTURE_RIGHT_ARROW, ts->input_dev->keybit);
++        set_bit(KEY_GESTURE_DOWN_ARROW, ts->input_dev->keybit);
++        set_bit(KEY_GESTURE_SWIPE_LEFT, ts->input_dev->keybit);
++        set_bit(KEY_GESTURE_SWIPE_DOWN, ts->input_dev->keybit);
++        set_bit(KEY_GESTURE_SWIPE_RIGHT, ts->input_dev->keybit);
++        set_bit(KEY_GESTURE_SWIPE_UP, ts->input_dev->keybit);
++        set_bit(KEY_GESTURE_SINGLE_TAP, ts->input_dev->keybit);
+     }
+ 
+     ts->kpd_input_dev->name = TPD_DEVICE"_kpd";
+@@ -4648,7 +4705,7 @@ int register_common_touch_device(struct touchpanel_data *pdata)
+     ts->loading_fw = false;
+     ts->is_suspended = 0;
+     ts->suspend_state = TP_SPEEDUP_RESUME_COMPLETE;
+-    ts->gesture_enable = 0;
++    ts->gesture_enable = 1;
+     ts->es_enable = 0;
+     ts->fd_enable = 0;
+     ts->palm_enable = 0;
+-- 
+2.20.1
+
+
+From f23b8e8719129b77f5b5c24e9b549f130f23d75a Mon Sep 17 00:00:00 2001
+From: PeterCxy <xqsx43cxy@gmail.com>
+Date: Thu, 12 Dec 2019 04:02:43 -0500
+Subject: [PATCH 3/4] drm: msm: default to FOD dimming when calculating alpha
+
+* Since commit ac878e6b, DC dimming has been introduced, which shares
+some logic with FOD. The original function to calculate alpha to dim the
+screen to the same brightness before enabling HBM has been modified to
+also work with DC dimming. It distinguishes the two cases (FOD and DC)
+with the flag `dim_status`.
+
+* However, in our user-space implementation of FOD, the `dim_status`
+flag is only set AFTER the FOD icon has been pressed by the user, unlike
+in official ROM where they enable dimming whenever the FOD icon shows
+up which breaks the image quality terribly. Our different order caused
+the userspace code to read the alpha value before the flag is actually
+set, and thus being incorrect, causing severe blinking when using FOD.
+
+* Fix this by defaulting to using the flag `op_dimlayer_bl_enable` for
+distinguishing between FOD and DC, so as long as DC dimming is not
+enabled (which is always the case because we haven't even implemented DC
+dimming in our userspace), the value read by userspace is always the one
+for FOD. If we were ever to implement DC dimming, we should probably
+separate these two interfaces to two sysfs nodes instead of sharing a
+common one to avoid confusion.
+
+Change-Id: I1aa2bdad330a6b555f7025e6fff3fa1684052726
+Signed-off-by: Adam W. Willis <return.of.octobot@gmail.com>
+---
+ drivers/gpu/drm/msm/sde/sde_crtc.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/gpu/drm/msm/sde/sde_crtc.c b/drivers/gpu/drm/msm/sde/sde_crtc.c
+index 02577aeb891c..75f44407e881 100644
+--- a/drivers/gpu/drm/msm/sde/sde_crtc.c
++++ b/drivers/gpu/drm/msm/sde/sde_crtc.c
+@@ -3394,6 +3394,7 @@ int bl_to_alpha_dc(int brightness)
+ 	return alpha;
+ }
+ 
++extern int op_dimlayer_bl_enable;
+ int oneplus_get_panel_brightness_to_alpha(void)
+ {
+ 	struct dsi_display *display = get_main_display();
+@@ -3402,7 +3403,7 @@ int oneplus_get_panel_brightness_to_alpha(void)
+ 		return 0;
+ 	if (oneplus_panel_alpha)
+ 		return oneplus_panel_alpha;
+-    if (display->panel->dim_status)
++    if (!op_dimlayer_bl_enable || display->panel->dim_status)
+ 		return brightness_to_alpha(display->panel->hbm_backlight);
+     else
+ 	return bl_to_alpha_dc(display->panel->hbm_backlight);
+@@ -5697,7 +5698,7 @@ int op_dimlayer_bl_enable_real = 0;
+ int op_dimlayer_bl = 0;
+ bool finger_type = false;
+ //extern int aod_layer_hide;
+-extern int op_dimlayer_bl_enable;
++//extern int op_dimlayer_bl_enable;
+ extern int op_dp_enable;
+ extern int sde_plane_check_fingerprint_layer(const struct drm_plane_state *drm_state);
+ static int sde_crtc_onscreenfinger_atomic_check(struct sde_crtc_state *cstate,
+-- 
+2.20.1
+
+
+From 8c2f0bcf33f791e8b9560101850b64da1c9b3da8 Mon Sep 17 00:00:00 2001
+From: Michael Adisumarta <madisuma@codeaurora.org>
+Date: Thu, 11 Jul 2019 11:49:43 -0700
+Subject: [PATCH 4/4] msm: ipa3: add qmi support for cleaning MHIP rules and
+ frags
+
+Add QMI IDL changes for supporting cleaning DL MHIP filtering
+rules and also adds an option to use legacy path instead
+of MHIP path for DL frag packets which are not supported.
+
+Change-Id: Ic5641012f1d8a8365f51eef27426ad4d008d9892
+Signed-off-by: Michael Adisumarta <madisuma@codeaurora.org>
+Signed-off-by: Anirudh Gupta <anirudhgupta109@gmail.com>
+---
+ include/uapi/linux/ipa_qmi_service_v01.h | 17 +++++++++++++++--
+ 1 file changed, 15 insertions(+), 2 deletions(-)
+
+diff --git a/include/uapi/linux/ipa_qmi_service_v01.h b/include/uapi/linux/ipa_qmi_service_v01.h
+index 461ccc862ee6..eee60ddbee74 100644
+--- a/include/uapi/linux/ipa_qmi_service_v01.h
++++ b/include/uapi/linux/ipa_qmi_service_v01.h
+@@ -64,6 +64,7 @@
+  * Indicates presence of newly added member to support HW stats.
+  */
+ #define IPA_QMI_SUPPORTS_STATS
++#define IPA_QMI_SUPPORT_MHI_DEFAULT
+ 
+ #define IPA_INT_MAX	((int)(~0U>>1))
+ #define IPA_INT_MIN	(-IPA_INT_MAX - 1)
+@@ -2606,8 +2607,14 @@ struct ipa_add_offload_connection_req_msg_v01 {
+ 	/* Must be set to true if embedded_call_mux_id is being passed */
+ 	uint32_t embedded_call_mux_id;
+ 	/* Mux ID for the new embedded call */
++	/* Optional */
++	/*  Default MHI path */
++	uint8_t default_mhi_path_valid;
++	/* Must be set to true if default_mhi_path is being passed */
++	uint8_t default_mhi_path;
++	/* Default MHI path */
+ }; /* Message */
+-#define IPA_ADD_OFFLOAD_CONNECTION_REQ_MSG_V01_MAX_MSG_LEN 11357
++#define IPA_ADD_OFFLOAD_CONNECTION_REQ_MSG_V01_MAX_MSG_LEN 11361
+ 
+ struct ipa_add_offload_connection_resp_msg_v01 {
+ 	/*  Result Code */
+@@ -2630,8 +2637,14 @@ struct ipa_remove_offload_connection_req_msg_v01 {
+ 	uint32_t filter_handle_list_len;
+ 	struct ipa_filter_rule_identifier_to_handle_map_v01
+ 		filter_handle_list[QMI_IPA_MAX_FILTERS_V01];
++	/* Optional */
++	/*  Clean All rules */
++	uint8_t clean_all_rules_valid;
++	/* Must be set to true if clean_all_rules is being passed */
++	uint8_t clean_all_rules;
++	/* Clean All rules */
+ }; /* Message */
+-#define IPA_REMOVE_OFFLOAD_CONNECTION_REQ_MSG_V01_MAX_MSG_LEN 516
++#define IPA_REMOVE_OFFLOAD_CONNECTION_REQ_MSG_V01_MAX_MSG_LEN 520
+ 
+ struct ipa_remove_offload_connection_resp_msg_v01 {
+ 	/* optional */
+-- 
+2.20.1
+
