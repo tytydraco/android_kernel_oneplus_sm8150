@@ -413,6 +413,10 @@ static inline int current_is_fg(void)
 	return 0;
 }
 #else
+static inline bool is_fg(int uid)
+{
+	return false;
+}
 static inline int current_is_fg(void)
 {
 	return 0;
