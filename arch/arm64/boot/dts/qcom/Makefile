@@ -30,27 +30,7 @@ dtb-$(CONFIG_ARCH_QCS405) += qcs403-iot-sku1.dtb \
 endif
 
 ifeq ($(CONFIG_BUILD_ARM64_DT_OVERLAY),y)
-	dtbo-$(CONFIG_ARCH_SM8150) += \
-		sm8150-cdp-overlay.dtbo \
-		sm8150-mtp-overlay.dtbo \
-		sm8150-rumi-overlay.dtbo \
-		sm8150-qrd-overlay.dtbo \
-		sm8150-qrd-dvt-overlay.dtbo \
-		sa8155-adp-star-overlay.dtbo \
-		sa8155p-adp-star-overlay.dtbo \
-		sa8155-v2-adp-air-overlay.dtbo \
-                sa8155p-v2-adp-air-overlay.dtbo \
-		sa8155-adp-alcor-overlay.dtbo \
-		sa8155p-adp-alcor-overlay.dtbo \
-		sm8150-sdx50m-cdp-overlay.dtbo \
-		sm8150-sdx50m-mtp-overlay.dtbo \
-		sm8150-sdx50m-mtp-2.5k-panel-overlay.dtbo \
-		sm8150-sdx50m-qrd-overlay.dtbo \
-		sm8150-sdxprairie-cdp-overlay.dtbo \
-		sm8150-sdxprairie-mtp-overlay.dtbo \
-		sm8150-sdxprairie-v2-cdp-overlay.dtbo \
-		sm8150-sdxprairie-v2-mtp-overlay.dtbo \
-		sm8150-hdk-overlay.dtbo
+	dtbo-$(CONFIG_ARCH_SM8150) += sm8150-rumi-overlay.dtbo
 
 sm8150-cdp-overlay.dtbo-base := sm8150.dtb sm8150-v2.dtb sm8150p.dtb sm8150p-v2.dtb
 sm8150-mtp-overlay.dtbo-base := sm8150.dtb sm8150-v2.dtb sm8150p.dtb sm8150p-v2.dtb
@@ -75,44 +55,12 @@ endif
 
 ifeq ($(CONFIG_BUILD_ARM64_DT_OVERLAY),y)
 	dtbo-$(CONFIG_ARCH_SM8150) += \
-		sm8150-mtp-overlay.dtbo \
-		sm8150-sdxprairie-mtp-overlay.dtbo \
-		guacamole-overlay-t0.dtbo \
-		guacamole-overlay-evt1.dtbo \
-		guacamole-overlay-evt2.dtbo \
-		guacamole-overlay-evt2-second.dtbo \
-		guacamole-overlay-evt3.dtbo \
-		guacamole-overlay-dvt.dtbo \
 		guacamole-overlay-pvt.dtbo \
-		guacamoleb-overlay-t0.dtbo \
-		guacamoleb-overlay-evt.dtbo \
-		guacamoleb-overlay-dvt.dtbo \
 		guacamoleb-overlay-pvt.dtbo \
-		sm8150-sdx50m-mtp-overlay.dtbo \
-		guacamole-sdx50m-overlay-t0.dtbo \
-		guacamole-sdx50m-overlay-evt1.dtbo \
-		guacamole-sdx50m-overlay-evt2.dtbo \
-		guacamole-sdx50m-overlay-dvt.dtbo \
 		guacamole-sdx50m-overlay-pvt.dtbo \
-		guacamoles-sdx50m-overlay-t0.dtbo \
-		guacamoles-sdx50m-overlay-evt.dtbo \
-		guacamoles-sdx50m-overlay-dvt.dtbo \
 		guacamoles-sdx50m-overlay-pvt.dtbo \
-		hotdogb-overlay-t0.dtbo \
-		hotdogb-overlay-evt.dtbo \
-		hotdogb-overlay-evt-second.dtbo \
-		hotdogb-overlay-dvt.dtbo \
-		hotdogb-overlay-dvt-second.dtbo \
-		hotdogb-overlay-pvt.dtbo \
 		hotdogb-overlay-pvt-second.dtbo \
-		hotdog-overlay-t0.dtbo \
-		hotdog-overlay-evt.dtbo \
-		hotdog-overlay-dvt.dtbo \
 		hotdog-overlay-pvt.dtbo \
-		hotdogg-sdx55m-overlay-t0.dtbo \
-		hotdogg-sdx55m-overlay-evt1.dtbo \
-		hotdogg-sdx55m-overlay-evt2.dtbo \
-		hotdogg-sdx55m-overlay-dvt.dtbo \
 		hotdogg-sdx55m-overlay-pvt.dtbo
 
 sm8150-mtp-overlay.dtbo-base := sm8150.dtb sm8150-v2.dtb sm8150p.dtb sm8150p-v2.dtb
@@ -157,31 +105,7 @@ hotdogb-overlay-pvt-second.dtbo-base := sm8150.dtb sm8150-v2.dtb sm8150p.dtb sm8
 sm8150-sdxprairie-v2-cdp-overlay.dtbo-base := sm8150.dtb sm8150-v2.dtb sm8150p.dtb sm8150p-v2.dtb
 sm8150-sdxprairie-v2-mtp-overlay.dtbo-base := sm8150.dtb sm8150-v2.dtb sm8150p.dtb sm8150p-v2.dtb
 else
-dtb-$(CONFIG_ARCH_SM8150)	+= sm8150-rumi.dtb \
-	sm8150-mtp.dtb \
-	sm8150-cdp.dtb \
-	sm8150-qrd.dtb \
-	sa8155-adp-star.dtb \
-	sa8155p-adp-star.dtb \
-	sa8155-v2-adp-star.dtb \
-	sa8155p-v2-adp-star.dtb \
-	sa8155-v2-adp-air.dtb \
-	sa8155p-v2-adp-air.dtb \
-	sa8155-adp-alcor.dtb \
-	sa8155p-adp-alcor.dtb \
-	sm8150-v2-rumi.dtb \
-	sm8150-v2-mtp.dtb \
-	sm8150-v2-cdp.dtb \
-	sm8150-v2-qrd.dtb \
-	sm8150-v2-qrd-dvt.dtb \
-	sm8150p-mtp.dtb \
-	sm8150p-cdp.dtb \
-	sm8150p-qrd.dtb \
-	sm8150p-v2-mtp.dtb \
-	sm8150p-v2-cdp.dtb \
-	sm8150p-v2-qrd.dtb \
-	sm8150-hdk.dtb \
-	sm8150p-hdk.dtb
+dtb-$(CONFIG_ARCH_SM8150)	+= sm8150-rumi.dtb
 endif
 
 dtb-$(CONFIG_QTI_GVM) += sa8155-vm.dtb \
