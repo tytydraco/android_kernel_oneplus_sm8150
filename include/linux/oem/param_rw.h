@@ -26,11 +26,38 @@ typedef enum {
 	PARAM_SID_INVALID = -1
 } param_sid_index_t;
 
+#ifdef CONFIG_PARAM_READ_WRITE
+void init_param_mem_base_size(phys_addr_t base, unsigned long size);
+
 int get_param_by_index_and_offset(uint32 sid_index, uint32 offset, void * buf, int length);
 int set_param_by_index_and_offset(uint32 sid_index, uint32 offset, void * buf, int length);
 
 int add_restart_08_count(void);
 int add_restart_other_count(void);
+#else
+static inline void init_param_mem_base_size(phys_addr_t base, unsigned long size)
+{
+}
+
+static inline int get_param_by_index_and_offset(uint32 sid_index, uint32 offset, void * buf, int length)
+{
+	return length;
+}
+static inline int set_param_by_index_and_offset(uint32 sid_index, uint32 offset, void * buf, int length)
+{
+	return 0;
+}
+
+static inline int add_restart_08_count(void)
+{
+	return 0;
+}
+static inline int add_restart_other_count(void)
+{
+	return 0;
+}
+#endif
+
 //end
 #endif
 
