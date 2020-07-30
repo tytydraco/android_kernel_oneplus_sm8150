@@ -309,11 +309,13 @@ static unsigned long isolate_uid_lru_pages(struct page *page)
 
 static bool cache_is_low(void)
 {
+#ifdef ANDROID_LOW_MEMORY_KILLER
 	unsigned long cache =
 		global_node_page_state(NR_FILE_PAGES) - total_swapcache_pages();
 
 	if (cache < get_max_minfree())
 		return true;
+#endif
 
 	return false;
 }
@@ -396,6 +398,7 @@ static unsigned long uid_lru_size(void)
 
 static int suitable_reclaim_check(struct lruvec *lruvec)
 {
+#ifdef CONFIG_ANDROID_LOW_MEMORY_KILLER
 	unsigned long active = global_zone_page_state(NR_ZONE_ACTIVE_FILE);
 	unsigned long inactive = global_zone_page_state(NR_ZONE_INACTIVE_FILE);
 	unsigned long total_uid_lru_nr = uid_lru_size();
@@ -403,6 +406,7 @@ static int suitable_reclaim_check(struct lruvec *lruvec)
 	if ((active + inactive) > get_max_minfree())
 		return ((active + inactive) << 3) < total_uid_lru_nr;
 	else
+#endif
 		return SMART_BOOST_PUTBACK_LRU;
 }
 
